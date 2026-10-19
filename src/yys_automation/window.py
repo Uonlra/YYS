@@ -42,6 +42,12 @@ class WindowLocator:
             rect = wintypes.RECT()
             if not user32.GetClientRect(hwnd, ctypes.byref(rect)):
                 return True
+            client_width = int(rect.right - rect.left)
+            client_height = int(rect.bottom - rect.top)
+            # Minimized windows commonly report a -32000 position and zero-sized
+            # client area; they are not usable for capture or coordinate mapping.
+            if client_width <= 0 or client_height <= 0:
+                return True
             point = wintypes.POINT(0, 0)
             if not user32.ClientToScreen(hwnd, ctypes.byref(point)):
                 return True
@@ -51,8 +57,8 @@ class WindowLocator:
                     title=title,
                     client_left=int(point.x),
                     client_top=int(point.y),
-                    client_width=int(rect.right - rect.left),
-                    client_height=int(rect.bottom - rect.top),
+                    client_width=client_width,
+                    client_height=client_height,
                 )
             )
             return True

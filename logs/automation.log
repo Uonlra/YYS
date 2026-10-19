@@ -1,3 +1,9 @@
 2026-10-19 15:19:23 INFO Automation starting. Press Esc or Ctrl+Shift+Q to stop.
 2026-10-19 15:19:23 INFO Config: target=assets\targets\start.png threshold=0.860 dry_run=False
 2026-10-19 15:19:23 INFO Startup delay: 3.0 seconds
+2026-10-19 15:23:16 INFO Stopped by KeyboardInterrupt
+2026-10-19 15:23:16 INFO Automation stopped. total_clicks=0
+2026-10-19 15:23:18 INFO Automation starting. Press Esc or Ctrl+Shift+Q to stop.
+2026-10-19 15:23:18 INFO Config: target=assets\targets\start.png threshold=0.860 dry_run=False
+2026-10-19 15:23:18 INFO Startup delay: 3.0 seconds
+2026-10-19 15:29:59 INFO Automation stopped. total_clicks=0
