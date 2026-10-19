@@ -59,6 +59,10 @@ class AppConfig:
     dry_run: bool
     log_file: Path
     window: WindowConfig
+    capture_mode: str
+    template_scale_min: float
+    template_scale_max: float
+    template_scale_step: float
 
 
 def load_config(path: Path) -> AppConfig:
@@ -100,6 +104,10 @@ def load_config(path: Path) -> AppConfig:
             reference_width=int(raw.get("window", {}).get("reference_width", 1280)),
             reference_height=int(raw.get("window", {}).get("reference_height", 720)),
         ),
+        capture_mode=str(raw.get("capture_mode", "desktop")),
+        template_scale_min=float(raw.get("recognition", {}).get("template_scale_min", 0.75)),
+        template_scale_max=float(raw.get("recognition", {}).get("template_scale_max", 1.35)),
+        template_scale_step=float(raw.get("recognition", {}).get("template_scale_step", 0.05)),
     )
     _validate_config(config)
     return config
@@ -137,3 +145,11 @@ def _validate_config(config: AppConfig) -> None:
         raise ValueError("move_duration_seconds.max must be >= min")
     if config.window.reference_width <= 0 or config.window.reference_height <= 0:
         raise ValueError("window reference dimensions must be positive")
+    if config.capture_mode not in {"desktop", "window"}:
+        raise ValueError("capture_mode must be 'desktop' or 'window'")
+    if config.template_scale_min <= 0:
+        raise ValueError("recognition.template_scale_min must be positive")
+    if config.template_scale_max < config.template_scale_min:
+        raise ValueError("recognition.template_scale_max must be >= min")
+    if config.template_scale_step <= 0:
+        raise ValueError("recognition.template_scale_step must be positive")

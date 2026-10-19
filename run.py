@@ -6,7 +6,7 @@ import sys
 import time
 from pathlib import Path
 
-from src.yys_automation.config import AppConfig, load_config
+from src.yys_automation.config import AppConfig, Region, load_config
 from src.yys_automation.logging_setup import setup_logging
 from src.yys_automation.window import WindowLocator
 
@@ -23,6 +23,16 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Locate the configured Windows window and print its client area without clicking.",
     )
+    parser.add_argument(
+        "--capture-window",
+        metavar="PATH",
+        help="Capture the configured window client area to PATH without clicking.",
+    )
+    parser.add_argument(
+        "--diagnose-match",
+        action="store_true",
+        help="Capture once and print the best template score without clicking.",
+    )
     return parser.parse_args()
 
 
@@ -37,17 +47,34 @@ def run(config: AppConfig) -> int:
     from src.yys_automation.detector import TemplateDetector
     from src.yys_automation.safety import StopController
     from src.yys_automation.screen import ScreenCapture
+    from src.yys_automation.window_screen import WindowScreenCapture
 
     logger = setup_logging(config.log_file)
     stop_controller = StopController(logger)
     stop_controller.start()
 
-    detector = TemplateDetector(config.target_image, config.threshold)
-    screen = ScreenCapture(config.allowed_region)
+    detector = TemplateDetector(
+        config.target_image,
+        config.threshold,
+        config.template_scale_min,
+        config.template_scale_max,
+        config.template_scale_step,
+    )
+    screen = (
+        WindowScreenCapture(config.window)
+        if config.capture_mode == "window"
+        else ScreenCapture(config.allowed_region)
+    )
     clicker = HumanLikeClicker(config, logger)
 
     logger.info("Automation starting. Press Esc or Ctrl+Shift+Q to stop.")
-    logger.info("Config: target=%s threshold=%.3f dry_run=%s", config.target_image, config.threshold, config.dry_run)
+    logger.info(
+        "Config: target=%s threshold=%.3f dry_run=%s capture_mode=%s",
+        config.target_image,
+        config.threshold,
+        config.dry_run,
+        config.capture_mode,
+    )
 
     if config.startup_delay_seconds > 0:
         logger.info("Startup delay: %.1f seconds", config.startup_delay_seconds)
@@ -55,21 +82,59 @@ def run(config: AppConfig) -> int:
 
     clicks_done = 0
     last_click_at = 0.0
+    last_diagnostic_at = 0.0
 
     try:
         while not stop_controller.should_stop:
-            frame = screen.grab()
+            try:
+                frame = screen.grab()
+            except Exception as exc:  # keep the stop hotkey available on capture errors
+                logger.error("Capture failed: %s", exc)
+                sleep_with_stop(config.scan_interval_seconds, stop_controller)
+                continue
             match = detector.find_best(frame.image)
 
             if match is None:
-                logger.debug("No match found")
+                now = time.monotonic()
+                if now - last_diagnostic_at >= 2.0:
+                    last_diagnostic_at = now
+                    logger.info(
+                        "No match: best_score=%.4f threshold=%.4f scale=%.3f "
+                        "best_location=(left=%d top=%d) frame=(left=%d top=%d width=%d height=%d)",
+                        detector.last_score,
+                        detector.threshold,
+                        detector.last_scale,
+                        detector.last_location[0],
+                        detector.last_location[1],
+                        frame.left,
+                        frame.top,
+                        round(frame.image.shape[1] * frame.scale_x),
+                        round(frame.image.shape[0] * frame.scale_y),
+                    )
                 sleep_with_stop(config.scan_interval_seconds, stop_controller)
                 continue
 
-            absolute_box = match.box.offset(frame.left, frame.top)
+            absolute_box = frame.to_screen_region(match.box)
             logger.info(
-                "Match score=%.4f box=(left=%d top=%d width=%d height=%d)",
+                "Frame client=(left=%d top=%d width=%d height=%d) "
+                "reference=(width=%d height=%d) scale=(x=%.4f y=%.4f)",
+                frame.left,
+                frame.top,
+                round(frame.image.shape[1] * frame.scale_x),
+                round(frame.image.shape[0] * frame.scale_y),
+                frame.image.shape[1],
+                frame.image.shape[0],
+                frame.scale_x,
+                frame.scale_y,
+            )
+            logger.info(
+                "Match score=%.4f reference_box=(left=%d top=%d width=%d height=%d) "
+                "screen_box=(left=%d top=%d width=%d height=%d)",
                 match.score,
+                match.box.left,
+                match.box.top,
+                match.box.width,
+                match.box.height,
                 absolute_box.left,
                 absolute_box.top,
                 absolute_box.width,
@@ -87,7 +152,12 @@ def run(config: AppConfig) -> int:
                 break
 
             x, y = clicker.pick_point_inside(absolute_box, random.Random())
-            if not config.allowed_region.contains_point(x, y):
+            frame_region = config.allowed_region
+            if config.capture_mode == "window":
+                frame_region = frame.to_screen_region(
+                    Region(left=0, top=0, width=frame.image.shape[1], height=frame.image.shape[0])
+                )
+            if not frame_region.contains_point(x, y):
                 logger.warning("Click skipped: point outside allowed region x=%d y=%d", x, y)
                 sleep_with_stop(config.scan_interval_seconds, stop_controller)
                 continue
@@ -130,6 +200,58 @@ def main() -> int:
             f"Client: left={window.client_left} top={window.client_top} "
             f"width={window.client_width} height={window.client_height}"
         )
+        return 0
+    if args.capture_window:
+        from src.yys_automation.window_capture import WindowCaptureError, save_capture
+
+        window = WindowLocator().find_first(config.window.title_contains)
+        if window is None:
+            print(f"Window not found: {config.window.title_contains}")
+            return 1
+        try:
+            method = save_capture(window, args.capture_window)
+        except WindowCaptureError as exc:
+            print(f"Window capture failed: {exc}")
+            return 1
+        print(
+            f"Captured {window.client_width}x{window.client_height} client area "
+            f"to {args.capture_window} using {method}"
+        )
+        return 0
+    if args.diagnose_match:
+        from src.yys_automation.detector import TemplateDetector
+        from src.yys_automation.window_screen import WindowScreenCapture
+
+        if config.capture_mode != "window":
+            print("--diagnose-match currently requires capture_mode: window")
+            return 2
+        try:
+            frame = WindowScreenCapture(config.window).grab()
+        except Exception as exc:
+            print(f"Window capture failed: {exc}")
+            return 1
+        detector = TemplateDetector(
+            config.target_image,
+            config.threshold,
+            config.template_scale_min,
+            config.template_scale_max,
+            config.template_scale_step,
+        )
+        match = detector.find_best(frame.image)
+        print(
+            f"best_score={detector.last_score:.4f} threshold={detector.threshold:.4f} "
+            f"template_scale={detector.last_scale:.3f} "
+            f"best_location=(left={detector.last_location[0]} top={detector.last_location[1]}) "
+            f"frame={frame.image.shape[1]}x{frame.image.shape[0]} "
+            f"client={round(frame.image.shape[1] * frame.scale_x)}x{round(frame.image.shape[0] * frame.scale_y)}"
+        )
+        if match is not None:
+            box = frame.to_screen_region(match.box)
+            print(
+                f"matched reference_box=({match.box.left},{match.box.top},"
+                f"{match.box.width},{match.box.height}) "
+                f"screen_box=({box.left},{box.top},{box.width},{box.height})"
+            )
         return 0
     return run(config)
 

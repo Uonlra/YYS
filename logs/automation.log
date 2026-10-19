@@ -7,3 +7,151 @@
 2026-10-19 15:23:18 INFO Config: target=assets\targets\start.png threshold=0.860 dry_run=False
 2026-10-19 15:23:18 INFO Startup delay: 3.0 seconds
 2026-10-19 15:29:59 INFO Automation stopped. total_clicks=0
+2026-10-19 16:17:35 INFO Automation starting. Press Esc or Ctrl+Shift+Q to stop.
+2026-10-19 16:17:35 INFO Config: target=assets\targets\start.png threshold=0.860 dry_run=True capture_mode=window
+2026-10-19 16:17:35 INFO Startup delay: 3.0 seconds
+2026-10-19 16:21:45 INFO Stopped by KeyboardInterrupt
+2026-10-19 16:21:45 INFO Automation stopped. total_clicks=0
+2026-10-19 16:22:29 INFO Automation starting. Press Esc or Ctrl+Shift+Q to stop.
+2026-10-19 16:22:29 INFO Config: target=assets\targets\start.png threshold=0.860 dry_run=True capture_mode=window
+2026-10-19 16:22:29 INFO Startup delay: 3.0 seconds
+2026-10-19 16:24:31 INFO Automation starting. Press Esc or Ctrl+Shift+Q to stop.
+2026-10-19 16:24:31 INFO Config: target=assets\targets\start.png threshold=0.860 dry_run=True capture_mode=window
+2026-10-19 16:24:31 INFO Startup delay: 3.0 seconds
+2026-10-19 16:26:19 INFO Stopped by KeyboardInterrupt
+2026-10-19 16:26:19 INFO Automation stopped. total_clicks=0
+2026-10-19 16:26:24 INFO Automation starting. Press Esc or Ctrl+Shift+Q to stop.
+2026-10-19 16:26:24 INFO Config: target=assets\targets\start.png threshold=0.860 dry_run=True capture_mode=window
+2026-10-19 16:26:24 INFO Startup delay: 3.0 seconds
+2026-10-19 16:27:49 INFO Stopped by KeyboardInterrupt
+2026-10-19 16:27:49 INFO Automation stopped. total_clicks=0
+2026-10-19 16:27:59 INFO Automation starting. Press Esc or Ctrl+Shift+Q to stop.
+2026-10-19 16:27:59 INFO Config: target=assets\targets\start.png threshold=0.860 dry_run=True capture_mode=window
+2026-10-19 16:27:59 INFO Startup delay: 3.0 seconds
+2026-10-19 16:47:01 WARNING Emergency stop requested
+2026-10-19 16:47:01 INFO Automation stopped. total_clicks=0
+2026-10-19 16:47:06 INFO Automation starting. Press Esc or Ctrl+Shift+Q to stop.
+2026-10-19 16:47:06 INFO Config: target=assets\targets\start.png threshold=0.860 dry_run=True capture_mode=window
+2026-10-19 16:47:06 INFO Startup delay: 3.0 seconds
+2026-10-19 16:47:10 INFO Frame client=(left=402 top=144 width=1136 height=640) reference=(width=1280 height=720) scale=(x=0.8875 y=0.8889)
+2026-10-19 16:47:10 INFO Match score=0.9263 reference_box=(left=1111 top=558 width=166 height=152) screen_box=(left=1388 top=640 width=147 height=135)
+2026-10-19 16:47:10 INFO Dry run: would click x=1462 y=711
+2026-10-19 16:47:11 INFO Frame client=(left=402 top=144 width=1136 height=640) reference=(width=1280 height=720) scale=(x=0.8875 y=0.8889)
+2026-10-19 16:47:11 INFO Match score=0.9261 reference_box=(left=1111 top=558 width=166 height=152) screen_box=(left=1388 top=640 width=147 height=135)
+2026-10-19 16:47:11 INFO Dry run: would click x=1455 y=710
+2026-10-19 16:47:12 INFO Frame client=(left=402 top=144 width=1136 height=640) reference=(width=1280 height=720) scale=(x=0.8875 y=0.8889)
+2026-10-19 16:47:12 INFO Match score=0.9256 reference_box=(left=1111 top=558 width=166 height=152) screen_box=(left=1388 top=640 width=147 height=135)
+2026-10-19 16:47:12 INFO Dry run: would click x=1462 y=708
+2026-10-19 16:47:13 INFO Frame client=(left=402 top=144 width=1136 height=640) reference=(width=1280 height=720) scale=(x=0.8875 y=0.8889)
+2026-10-19 16:47:13 INFO Match score=0.9258 reference_box=(left=1111 top=558 width=166 height=152) screen_box=(left=1388 top=640 width=147 height=135)
+2026-10-19 16:47:13 INFO Dry run: would click x=1460 y=710
+2026-10-19 16:47:14 INFO Frame client=(left=402 top=144 width=1136 height=640) reference=(width=1280 height=720) scale=(x=0.8875 y=0.8889)
+2026-10-19 16:47:14 INFO Match score=0.9261 reference_box=(left=1111 top=558 width=166 height=152) screen_box=(left=1388 top=640 width=147 height=135)
+2026-10-19 16:47:14 INFO Dry run: would click x=1467 y=708
+2026-10-19 16:47:15 INFO Frame client=(left=402 top=144 width=1136 height=640) reference=(width=1280 height=720) scale=(x=0.8875 y=0.8889)
+2026-10-19 16:47:15 INFO Match score=0.9257 reference_box=(left=1111 top=558 width=166 height=152) screen_box=(left=1388 top=640 width=147 height=135)
+2026-10-19 16:47:15 INFO Dry run: would click x=1464 y=709
+2026-10-19 16:47:16 INFO Frame client=(left=402 top=144 width=1136 height=640) reference=(width=1280 height=720) scale=(x=0.8875 y=0.8889)
+2026-10-19 16:47:16 INFO Match score=0.9258 reference_box=(left=1111 top=558 width=166 height=152) screen_box=(left=1388 top=640 width=147 height=135)
+2026-10-19 16:47:16 INFO Dry run: would click x=1464 y=706
+2026-10-19 16:47:17 INFO Frame client=(left=402 top=144 width=1136 height=640) reference=(width=1280 height=720) scale=(x=0.8875 y=0.8889)
+2026-10-19 16:47:17 INFO Match score=0.9258 reference_box=(left=1111 top=558 width=166 height=152) screen_box=(left=1388 top=640 width=147 height=135)
+2026-10-19 16:47:17 INFO Dry run: would click x=1462 y=711
+2026-10-19 16:47:18 INFO Frame client=(left=402 top=144 width=1136 height=640) reference=(width=1280 height=720) scale=(x=0.8875 y=0.8889)
+2026-10-19 16:47:18 INFO Match score=0.9261 reference_box=(left=1111 top=558 width=166 height=152) screen_box=(left=1388 top=640 width=147 height=135)
+2026-10-19 16:47:18 INFO Dry run: would click x=1461 y=710
+2026-10-19 16:47:19 INFO Frame client=(left=402 top=144 width=1136 height=640) reference=(width=1280 height=720) scale=(x=0.8875 y=0.8889)
+2026-10-19 16:47:19 INFO Match score=0.9262 reference_box=(left=1111 top=558 width=166 height=152) screen_box=(left=1388 top=640 width=147 height=135)
+2026-10-19 16:47:19 INFO Dry run: would click x=1459 y=710
+2026-10-19 16:47:20 INFO Frame client=(left=402 top=144 width=1136 height=640) reference=(width=1280 height=720) scale=(x=0.8875 y=0.8889)
+2026-10-19 16:47:20 INFO Match score=0.9255 reference_box=(left=1111 top=558 width=166 height=152) screen_box=(left=1388 top=640 width=147 height=135)
+2026-10-19 16:47:20 INFO Dry run: would click x=1458 y=706
+2026-10-19 16:47:21 INFO Frame client=(left=402 top=144 width=1136 height=640) reference=(width=1280 height=720) scale=(x=0.8875 y=0.8889)
+2026-10-19 16:47:21 INFO Match score=0.9258 reference_box=(left=1111 top=558 width=166 height=152) screen_box=(left=1388 top=640 width=147 height=135)
+2026-10-19 16:47:21 INFO Dry run: would click x=1466 y=705
+2026-10-19 16:47:22 INFO Frame client=(left=402 top=144 width=1136 height=640) reference=(width=1280 height=720) scale=(x=0.8875 y=0.8889)
+2026-10-19 16:47:22 INFO Match score=0.9264 reference_box=(left=1111 top=558 width=166 height=152) screen_box=(left=1388 top=640 width=147 height=135)
+2026-10-19 16:47:22 INFO Dry run: would click x=1457 y=705
+2026-10-19 16:47:22 INFO Frame client=(left=402 top=144 width=1136 height=640) reference=(width=1280 height=720) scale=(x=0.8875 y=0.8889)
+2026-10-19 16:47:22 INFO Match score=0.9264 reference_box=(left=1111 top=558 width=166 height=152) screen_box=(left=1388 top=640 width=147 height=135)
+2026-10-19 16:47:22 INFO Dry run: would click x=1460 y=703
+2026-10-19 16:47:23 INFO Frame client=(left=402 top=144 width=1136 height=640) reference=(width=1280 height=720) scale=(x=0.8875 y=0.8889)
+2026-10-19 16:47:23 INFO Match score=0.9256 reference_box=(left=1111 top=558 width=166 height=152) screen_box=(left=1388 top=640 width=147 height=135)
+2026-10-19 16:47:23 INFO Dry run: would click x=1467 y=704
+2026-10-19 16:47:24 INFO Frame client=(left=402 top=144 width=1136 height=640) reference=(width=1280 height=720) scale=(x=0.8875 y=0.8889)
+2026-10-19 16:47:24 INFO Match score=0.9258 reference_box=(left=1111 top=558 width=166 height=152) screen_box=(left=1388 top=640 width=147 height=135)
+2026-10-19 16:47:24 INFO Dry run: would click x=1457 y=708
+2026-10-19 16:47:26 INFO Frame client=(left=402 top=144 width=1136 height=640) reference=(width=1280 height=720) scale=(x=0.8875 y=0.8889)
+2026-10-19 16:47:26 INFO Match score=0.9262 reference_box=(left=1111 top=558 width=166 height=152) screen_box=(left=1388 top=640 width=147 height=135)
+2026-10-19 16:47:26 INFO Dry run: would click x=1459 y=708
+2026-10-19 16:47:27 INFO Frame client=(left=402 top=144 width=1136 height=640) reference=(width=1280 height=720) scale=(x=0.8875 y=0.8889)
+2026-10-19 16:47:27 INFO Match score=0.9261 reference_box=(left=1111 top=558 width=166 height=152) screen_box=(left=1388 top=640 width=147 height=135)
+2026-10-19 16:47:27 INFO Dry run: would click x=1455 y=708
+2026-10-19 16:47:28 INFO Frame client=(left=402 top=144 width=1136 height=640) reference=(width=1280 height=720) scale=(x=0.8875 y=0.8889)
+2026-10-19 16:47:28 INFO Match score=0.9257 reference_box=(left=1111 top=558 width=166 height=152) screen_box=(left=1388 top=640 width=147 height=135)
+2026-10-19 16:47:28 INFO Dry run: would click x=1466 y=709
+2026-10-19 16:47:29 INFO Frame client=(left=402 top=144 width=1136 height=640) reference=(width=1280 height=720) scale=(x=0.8875 y=0.8889)
+2026-10-19 16:47:29 INFO Match score=0.9260 reference_box=(left=1111 top=558 width=166 height=152) screen_box=(left=1388 top=640 width=147 height=135)
+2026-10-19 16:47:29 INFO Dry run: would click x=1463 y=709
+2026-10-19 16:47:29 ERROR Capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 16:47:30 ERROR Capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 16:47:30 ERROR Capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 16:47:30 ERROR Capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 16:47:30 ERROR Capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 16:47:31 ERROR Capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 16:47:31 ERROR Capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 16:47:31 ERROR Capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 16:47:31 ERROR Capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 16:47:32 ERROR Capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 16:47:32 ERROR Capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 16:47:32 ERROR Capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 16:47:32 ERROR Capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 16:47:33 ERROR Capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 16:47:33 ERROR Capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 16:47:33 ERROR Capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 16:47:33 ERROR Capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 16:47:34 ERROR Capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 16:47:34 ERROR Capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 16:47:34 ERROR Capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 16:47:34 ERROR Capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 16:47:35 ERROR Capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 16:47:35 ERROR Capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 16:47:35 ERROR Capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 16:47:35 ERROR Capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 16:47:36 ERROR Capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 16:47:36 ERROR Capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 16:47:36 ERROR Capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 16:47:36 ERROR Capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 16:47:37 ERROR Capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 16:47:37 ERROR Capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 16:47:37 ERROR Capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 16:47:37 ERROR Capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 16:47:38 ERROR Capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 16:47:38 ERROR Capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 16:47:38 ERROR Capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 16:47:38 ERROR Capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 16:47:39 ERROR Capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 16:47:39 ERROR Capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 16:47:39 ERROR Capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 16:47:39 ERROR Capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 16:47:40 ERROR Capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 16:47:41 INFO Frame client=(left=402 top=144 width=1136 height=640) reference=(width=1280 height=720) scale=(x=0.8875 y=0.8889)
+2026-10-19 16:47:41 INFO Match score=0.9261 reference_box=(left=1111 top=558 width=166 height=152) screen_box=(left=1388 top=640 width=147 height=135)
+2026-10-19 16:47:41 INFO Dry run: would click x=1456 y=711
+2026-10-19 16:47:42 INFO Frame client=(left=402 top=144 width=1136 height=640) reference=(width=1280 height=720) scale=(x=0.8875 y=0.8889)
+2026-10-19 16:47:42 INFO Match score=0.9261 reference_box=(left=1111 top=558 width=166 height=152) screen_box=(left=1388 top=640 width=147 height=135)
+2026-10-19 16:47:42 INFO Dry run: would click x=1457 y=705
+2026-10-19 16:47:43 INFO Frame client=(left=402 top=144 width=1136 height=640) reference=(width=1280 height=720) scale=(x=0.8875 y=0.8889)
+2026-10-19 16:47:43 INFO Match score=0.9261 reference_box=(left=1111 top=558 width=166 height=152) screen_box=(left=1388 top=640 width=147 height=135)
+2026-10-19 16:47:43 INFO Dry run: would click x=1465 y=711
+2026-10-19 16:47:44 INFO Frame client=(left=402 top=144 width=1136 height=640) reference=(width=1280 height=720) scale=(x=0.8875 y=0.8889)
+2026-10-19 16:47:44 INFO Match score=0.9257 reference_box=(left=1111 top=558 width=166 height=152) screen_box=(left=1388 top=640 width=147 height=135)
+2026-10-19 16:47:44 INFO Dry run: would click x=1463 y=707
+2026-10-19 16:47:45 INFO Frame client=(left=402 top=144 width=1136 height=640) reference=(width=1280 height=720) scale=(x=0.8875 y=0.8889)
+2026-10-19 16:47:45 INFO Match score=0.9260 reference_box=(left=1111 top=558 width=166 height=152) screen_box=(left=1388 top=640 width=147 height=135)
+2026-10-19 16:47:45 INFO Dry run: would click x=1462 y=709
+2026-10-19 16:47:46 WARNING Emergency stop requested
+2026-10-19 16:47:47 INFO Frame client=(left=402 top=144 width=1136 height=640) reference=(width=1280 height=720) scale=(x=0.8875 y=0.8889)
+2026-10-19 16:47:47 INFO Match score=0.9264 reference_box=(left=1111 top=558 width=166 height=152) screen_box=(left=1388 top=640 width=147 height=135)
+2026-10-19 16:47:47 INFO Dry run: would click x=1458 y=711
+2026-10-19 16:47:47 INFO Automation stopped. total_clicks=0

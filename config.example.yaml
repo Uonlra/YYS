@@ -1,6 +1,9 @@
 # 目标图片路径。建议放在 assets/targets/ 下面。
 target_image: "assets/targets/start.png"
 
+# window uses the visible client window; desktop uses the configured screen region.
+capture_mode: "window"
+
 window:
   title_contains: "阴阳师-MuMu模拟器专版"
   reference_width: 1280
@@ -8,6 +11,11 @@ window:
 
 # OpenCV 模板匹配阈值，越高越严格。常用范围 0.80-0.95。
 threshold: 0.86
+
+recognition:
+  template_scale_min: 0.75
+  template_scale_max: 1.35
+  template_scale_step: 0.05
 
 # 只截取和点击这个白名单区域，单位是屏幕像素。
 allowed_region:

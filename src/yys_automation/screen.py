@@ -14,6 +14,16 @@ class Frame:
     image: np.ndarray
     left: int
     top: int
+    scale_x: float = 1.0
+    scale_y: float = 1.0
+
+    def to_screen_region(self, region: Region) -> Region:
+        return Region(
+            left=self.left + round(region.left * self.scale_x),
+            top=self.top + round(region.top * self.scale_y),
+            width=max(1, round(region.width * self.scale_x)),
+            height=max(1, round(region.height * self.scale_y)),
+        )
 
 
 class ScreenCapture:
