@@ -1,0 +1,45 @@
+# 目标图片路径。建议放在 assets/targets/ 下面。
+target_image: "assets/targets/start.png"
+
+window:
+  title_contains: "阴阳师"
+  reference_width: 1280
+  reference_height: 720
+
+# OpenCV 模板匹配阈值，越高越严格。常用范围 0.80-0.95。
+threshold: 0.86
+
+# 只截取和点击这个白名单区域，单位是屏幕像素。
+allowed_region:
+  left: 0
+  top: 0
+  width: 1280
+  height: 720
+
+# 主循环扫描间隔。越小越实时，但 CPU 占用越高。
+scan_interval_seconds: 0.25
+
+# 最小点击间隔，限制最大点击频率。
+min_click_interval_seconds: 2.0
+
+# 最大点击次数。设为 null 表示不限制，但 MVP 建议先保留限制。
+max_clicks: 10
+
+# 鼠标移动到目标点的随机耗时范围。
+move_duration_seconds:
+  min: 0.2
+  max: 0.8
+
+# 点击点在识别框中心附近随机偏移，但仍会限制在识别框内部。
+click_jitter_pixels:
+  x: 6
+  y: 4
+
+# 启动后先等待几秒，方便你切换到目标窗口。
+startup_delay_seconds: 3.0
+
+# 只识别不点击，用于调试。
+dry_run: false
+
+# 日志文件。
+log_file: "logs/automation.log"
