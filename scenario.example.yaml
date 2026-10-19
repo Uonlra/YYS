@@ -1,0 +1,43 @@
+name: onmyoji_reward_flow
+max_retries: 3
+
+steps:
+  - id: start
+    type: match_and_click
+    image: assets/targets/start.png
+    threshold: 0.86
+    timeout_seconds: 30
+    wait_after_seconds: 1.0
+
+  # Add the screenshots for the remaining states after capturing them.
+  - id: victory
+    type: match_and_click
+    image: assets/targets/victory.png
+    timeout_seconds: 120
+
+  - id: confirm_1
+    type: match_and_click
+    image: assets/targets/confirm.png
+    timeout_seconds: 20
+
+  - id: confirm_2
+    type: match_and_click
+    image: assets/targets/confirm.png
+    timeout_seconds: 20
+
+  - id: confirm_3
+    type: match_and_click
+    image: assets/targets/confirm.png
+    timeout_seconds: 20
+
+  - id: claim_reward
+    type: click_point
+    x: 640
+    y: 360
+    wait_after_seconds: 1.0
+
+  - id: exit
+    type: click_point
+    x: 640
+    y: 360
+    wait_after_seconds: 1.0

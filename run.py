@@ -33,6 +33,16 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Capture once and print the best template score without clicking.",
     )
+    parser.add_argument(
+        "--validate-scenario",
+        metavar="PATH",
+        help="Validate a scenario YAML without running it.",
+    )
+    parser.add_argument(
+        "--scenario",
+        metavar="PATH",
+        help="Run a scenario YAML through the workflow state machine.",
+    )
     return parser.parse_args()
 
 
@@ -189,6 +199,43 @@ def main() -> int:
         return 2
 
     config = load_config(config_path)
+    if args.validate_scenario:
+        from src.yys_automation.scenario import load_scenario, validate_scenario
+
+        scenario_path = Path(args.validate_scenario)
+        errors = validate_scenario(scenario_path)
+        if errors:
+            print("Scenario invalid:")
+            for error in errors:
+                print(f"- {error}")
+            return 1
+        scenario = load_scenario(scenario_path)
+        print(f"Scenario valid: {scenario.name} steps={len(scenario.steps)} retries={scenario.max_retries}")
+        return 0
+    if args.scenario:
+        from src.yys_automation.scenario import load_scenario
+        from src.yys_automation.safety import StopController
+        from src.yys_automation.window_screen import WindowScreenCapture
+        from src.yys_automation.workflow import WorkflowRunner
+        from src.yys_automation.window_clicker import WindowMessageClicker
+
+        logger = setup_logging(config.log_file)
+        stop_controller = StopController(logger)
+        stop_controller.start()
+        scenario = load_scenario(Path(args.scenario))
+        source = WindowScreenCapture(config.window)
+        clicker = WindowMessageClicker(config, logger)
+        try:
+            return 0 if WorkflowRunner(
+                scenario,
+                config,
+                source,
+                clicker,
+                stop_controller,
+                logger,
+            ).run() else 1
+        finally:
+            stop_controller.stop()
     if args.probe_window:
         window = WindowLocator().find_first(config.window.title_contains)
         if window is None:
