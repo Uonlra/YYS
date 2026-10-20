@@ -11,7 +11,7 @@ from tkinter import filedialog, messagebox, ttk
 import yaml
 
 from src.yys_automation.config import load_config
-from src.yys_automation.scenario import Scenario, ScenarioStep, load_scenario, validate_scenario
+from src.yys_automation.scenario import STEP_TYPES, Scenario, ScenarioStep, load_scenario, validate_scenario
 
 
 class ScenarioEditor:
@@ -97,7 +97,7 @@ class ScenarioEditor:
             var = tk.StringVar()
             self.form[key] = var
             if key == "type":
-                ttk.Combobox(row, textvariable=var, values=("match_and_click", "click_point", "wait"), state="readonly").pack(side=tk.LEFT, fill=tk.X, expand=True)
+                ttk.Combobox(row, textvariable=var, values=sorted(STEP_TYPES), state="readonly").pack(side=tk.LEFT, fill=tk.X, expand=True)
             else:
                 ttk.Entry(row, textvariable=var).pack(side=tk.LEFT, fill=tk.X, expand=True)
             if key == "image":
@@ -105,7 +105,7 @@ class ScenarioEditor:
 
         ttk.Label(
             right,
-            text="match_and_click 使用模板；click_point 使用参考坐标；wait 使用超时秒数。",
+            text="match_and_click 匹配并点击；wait_for_image 只等待模板；click_point 使用参考坐标；wait 使用超时秒数。",
             wraplength=300,
         ).pack(anchor=tk.W, pady=(16, 0))
 
@@ -231,6 +231,8 @@ class ScenarioEditor:
                 "name": self.scenario.name if self.scenario else path.stem,
                 "max_retries": self.scenario.max_retries if self.scenario else 3,
                 "retry_after_clicks": self.scenario.retry_after_clicks if self.scenario else False,
+                "repeat_count": self.scenario.repeat_count if self.scenario else 1,
+                "max_cycles": self.scenario.max_cycles if self.scenario else 800,
                 "steps": [self._step_to_yaml(step, path.parent) for step in self.steps],
             }
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -251,6 +253,8 @@ class ScenarioEditor:
                 "name": self.scenario.name if self.scenario else path.stem,
                 "max_retries": self.scenario.max_retries if self.scenario else 3,
                 "retry_after_clicks": self.scenario.retry_after_clicks if self.scenario else False,
+                "repeat_count": self.scenario.repeat_count if self.scenario else 1,
+                "max_cycles": self.scenario.max_cycles if self.scenario else 800,
                 "steps": [self._step_to_yaml(step, path.parent) for step in self.steps],
             }
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -296,7 +300,7 @@ class ScenarioEditor:
             id=self.form["id"].get().strip(),
             type=step_type,
             image=Path(image_value) if image_value else None,
-            threshold=float(self.form["threshold"].get() or 0.86) if step_type == "match_and_click" else None,
+            threshold=float(self.form["threshold"].get() or 0.86) if step_type in {"match_and_click", "wait_for_image"} else None,
             timeout_seconds=float(self.form["timeout"].get() or 30),
             x=int(x_value) if x_value else None,
             y=int(y_value) if y_value else None,

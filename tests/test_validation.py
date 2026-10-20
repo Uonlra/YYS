@@ -10,7 +10,7 @@ import numpy as np
 import yaml
 
 from src.yys_automation.config import load_config
-from src.yys_automation.scenario import validate_scenario
+from src.yys_automation.scenario import load_scenario, validate_scenario
 from src.yys_automation.screen import ScreenCapture
 
 
@@ -97,6 +97,42 @@ class ValidationTests(unittest.TestCase):
         with capture:
             self.assertFalse(capture._sct.closed)
         self.assertTrue(capture._sct.closed)
+
+    def test_wait_for_image_requires_template(self) -> None:
+        scenario = self.root / "observe.yaml"
+        scenario.write_text("steps:\n  - id: observe\n    type: wait_for_image\n", encoding="utf-8")
+        self.assertTrue(any("image is required" in error for error in validate_scenario(scenario)))
+
+    def test_repeat_count_validation(self) -> None:
+        for count in (0, -1, True, 1.5, 801):
+            with self.subTest(count=count):
+                path = self.root / "repeat.yaml"
+                path.write_text(yaml.safe_dump({
+                    "repeat_count": count, "max_cycles": 800,
+                    "steps": [{"id": "pause", "type": "wait"}],
+                }), encoding="utf-8")
+                self.assertTrue(validate_scenario(path))
+
+    def test_repeat_settings_load_with_safe_defaults(self) -> None:
+        path = self.root / "repeat.yaml"
+        for settings, expected in (({}, 1), ({"repeat_count": None}, None), ({"repeat_count": 800}, 800)):
+            with self.subTest(settings=settings):
+                path.write_text(yaml.safe_dump({
+                    **settings, "steps": [{"id": "pause", "type": "wait"}],
+                }), encoding="utf-8")
+                scenario = load_scenario(path)
+                self.assertEqual(scenario.repeat_count, expected)
+                self.assertEqual(scenario.max_cycles, 800)
+
+    def test_invalid_cycle_limit_is_rejected(self) -> None:
+        path = self.root / "cycles.yaml"
+        for limit in (0, -1, True, 1.5, None):
+            with self.subTest(limit=limit):
+                path.write_text(yaml.safe_dump({
+                    "max_cycles": limit, "repeat_count": None,
+                    "steps": [{"id": "pause", "type": "wait"}],
+                }), encoding="utf-8")
+                self.assertTrue(validate_scenario(path))
 
 
 if __name__ == "__main__":

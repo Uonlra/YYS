@@ -1,0 +1,34 @@
+name: reward_once
+max_retries: 1
+retry_after_clicks: false
+repeat_count: 1
+max_cycles: 800
+
+steps:
+  - id: start
+    type: match_and_click
+    image: ../../assets/targets/start.png
+    threshold: 0.86
+    timeout_seconds: 30
+    wait_after_seconds: 1.0
+
+  - id: confirm
+    type: match_and_click
+    image: ../../assets/targets/confirm.png
+    threshold: 0.86
+    timeout_seconds: 180
+    wait_after_seconds: 1.0
+
+  - id: reward
+    type: match_and_click
+    image: ../../assets/targets/reward.png
+    threshold: 0.86
+    timeout_seconds: 60
+    wait_after_seconds: 1.0
+
+  - id: returned_to_start
+    type: wait_for_image
+    image: ../../assets/targets/start.png
+    threshold: 0.86
+    timeout_seconds: 60
+    wait_after_seconds: 0

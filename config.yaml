@@ -44,10 +44,10 @@ click_jitter_pixels:
   y: 4
 
 # 启动后先等待几秒，方便你切换到目标窗口。
-startup_delay_seconds: 3.0
+startup_delay_seconds: 5.0
 
 # 只识别不点击，用于调试。
-dry_run: True
+dry_run: false
 
 # 日志文件。
 log_file: "logs/automation.log"

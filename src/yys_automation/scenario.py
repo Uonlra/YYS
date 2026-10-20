@@ -10,7 +10,7 @@ import yaml
 from src.yys_automation.config import AppConfig
 
 
-STEP_TYPES = {"match_and_click", "click_point", "wait"}
+STEP_TYPES = {"match_and_click", "wait_for_image", "click_point", "wait"}
 
 
 @dataclass(frozen=True)
@@ -31,6 +31,8 @@ class Scenario:
     max_retries: int
     retry_after_clicks: bool
     steps: tuple[ScenarioStep, ...]
+    repeat_count: int | None = 1
+    max_cycles: int = 800
 
 
 def load_scenario(path: Path) -> Scenario:
@@ -46,6 +48,13 @@ def load_scenario(path: Path) -> Scenario:
     retry_after_clicks = raw.get("retry_after_clicks", False)
     if not isinstance(retry_after_clicks, bool):
         raise ValueError("scenario retry_after_clicks must be a boolean")
+    max_cycles = _integer(raw.get("max_cycles", 800), "max_cycles")
+    if max_cycles < 1:
+        raise ValueError("scenario max_cycles must be >= 1")
+    repeat_value = raw.get("repeat_count", 1)
+    repeat_count = None if repeat_value is None else _integer(repeat_value, "repeat_count")
+    if repeat_count is not None and not 1 <= repeat_count <= max_cycles:
+        raise ValueError("scenario repeat_count must be null or between 1 and max_cycles")
 
     raw_steps = raw.get("steps")
     if not isinstance(raw_steps, list) or not raw_steps:
@@ -69,7 +78,7 @@ def load_scenario(path: Path) -> Scenario:
         image: Path | None = None
         if item.get("image") is not None:
             image = _resolve_path(path.parent, str(item["image"]))
-        if step_type == "match_and_click" and image is None:
+        if step_type in {"match_and_click", "wait_for_image"} and image is None:
             raise ValueError(f"step {step_id}: image is required")
 
         x = _integer(item["x"], f"step {step_id} x") if item.get("x") is not None else None
@@ -107,6 +116,8 @@ def load_scenario(path: Path) -> Scenario:
         max_retries=max_retries,
         retry_after_clicks=retry_after_clicks,
         steps=tuple(steps),
+        repeat_count=repeat_count,
+        max_cycles=max_cycles,
     )
 
 

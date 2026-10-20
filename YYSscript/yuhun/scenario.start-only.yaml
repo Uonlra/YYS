@@ -3,7 +3,7 @@ max_retries: 1
 steps:
   - id: start
     type: match_and_click
-    image: assets/targets/start.png
+    image: ../../assets/targets/start.png
     threshold: 0.86
     timeout_seconds: 30
     wait_after_seconds: 0.5

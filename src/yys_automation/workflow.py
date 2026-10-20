@@ -44,8 +44,33 @@ class WorkflowRunner:
         self.clicks_done = 0
         self.last_click_at = 0.0
         self._attempt_clicked = False
+        self.cycles_done = 0
 
     def run(self) -> bool:
+        cycle_limit = self.scenario.repeat_count or self.scenario.max_cycles
+        clicks_per_cycle = sum(step.type in {"match_and_click", "click_point"} for step in self.scenario.steps)
+        for cycle in range(1, cycle_limit + 1):
+            if self._should_stop():
+                return False
+            if self.config.max_clicks is not None and self.clicks_done + clicks_per_cycle > self.config.max_clicks:
+                self.logger.warning(
+                    "Scenario stopped before cycle %d: insufficient click budget "
+                    "done=%d max=%d required=%d completed_cycles=%d",
+                    cycle, self.clicks_done, self.config.max_clicks, clicks_per_cycle, self.cycles_done,
+                )
+                return False
+            self.logger.info("Scenario cycle %d/%d: %s", cycle, cycle_limit, self.scenario.name)
+            if not self._run_cycle():
+                self.logger.error("Scenario stopped: completed_cycles=%d clicks=%d", self.cycles_done, self.clicks_done)
+                return False
+            self.cycles_done += 1
+            self.logger.info("Scenario cycle completed: %d clicks=%d", self.cycles_done, self.clicks_done)
+        if self.scenario.repeat_count is None:
+            self.logger.info("Scenario reached safety cycle limit: %d", self.scenario.max_cycles)
+        self.logger.info("Scenario completed: %s cycles=%d", self.scenario.name, self.cycles_done)
+        return True
+
+    def _run_cycle(self) -> bool:
         for attempt in range(1, self.scenario.max_retries + 1):
             self._attempt_clicked = False
             self.logger.info(
@@ -55,7 +80,6 @@ class WorkflowRunner:
                 self.scenario.name,
             )
             if self._run_once():
-                self.logger.info("Scenario completed: %s", self.scenario.name)
                 return True
             if self._should_stop():
                 break
@@ -82,7 +106,7 @@ class WorkflowRunner:
             return self._sleep_with_stop(step.timeout_seconds)
 
         detector: TemplateDetector | None = None
-        if step.type == "match_and_click":
+        if step.type in {"match_and_click", "wait_for_image"}:
             assert step.image is not None
             detector = TemplateDetector(
                 step.image,
@@ -94,10 +118,10 @@ class WorkflowRunner:
 
         deadline = time.monotonic() + step.timeout_seconds
         while time.monotonic() < deadline and not self._should_stop():
-            if self.config.max_clicks is not None and self.clicks_done >= self.config.max_clicks:
+            if step.type != "wait_for_image" and self.config.max_clicks is not None and self.clicks_done >= self.config.max_clicks:
                 self.logger.warning("Step %s rejected: max clicks reached", step.id)
                 return False
-            if self.clicks_done:
+            if step.type != "wait_for_image" and self.clicks_done:
                 remaining = self.config.min_click_interval_seconds - (time.monotonic() - self.last_click_at)
                 if remaining > 0:
                     if not self._sleep_with_stop(min(remaining, max(0, deadline - time.monotonic()))):
@@ -120,6 +144,11 @@ class WorkflowRunner:
             if match is None:
                 self._sleep_with_stop(self.config.scan_interval_seconds)
                 continue
+            if self._should_stop():
+                return False
+            if step.type == "wait_for_image":
+                self.logger.info("Step image detected: id=%s score=%.4f", step.id, match.score)
+                return self._sleep_with_stop(step.wait_after_seconds)
             box = frame.to_screen_region(match.box)
             point = self.clicker.pick_point_inside(box, random.Random())
             self.logger.info(
