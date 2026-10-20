@@ -174,7 +174,7 @@ class WorkflowSafetyTests(unittest.TestCase):
         scenario = load_scenario(path)
         self.assertEqual([step.id for step in scenario.steps], ["start", "confirm", "reward", "returned_to_start"])
         self.assertEqual([step.image.name for step in scenario.steps], ["start.png", "confirm.png", "reward.png", "start.png"])
-        scenario = replace(scenario, steps=tuple(replace(step, wait_after_seconds=0, next_step=None, max_attempts=1) for step in scenario.steps))
+        scenario = replace(scenario, stable_frames=1, steps=tuple(replace(step, wait_after_seconds=0, next_step=None, max_attempts=1, requires_action=None) for step in scenario.steps))
         runner, clicker = self.runner(scenario, max_clicks=3)
         runner.config = replace(runner.config, min_click_interval_seconds=0)
 
@@ -204,8 +204,8 @@ class WorkflowSafetyTests(unittest.TestCase):
         self.assertIsNone(repeated.repeat_count)
         self.assertEqual(repeated.max_cycles, 800)
         repeated = replace(
-            repeated, max_cycles=2,
-            steps=tuple(replace(step, wait_after_seconds=0, next_step=None, max_attempts=1) for step in repeated.steps),
+            repeated, max_cycles=2, stable_frames=1,
+            steps=tuple(replace(step, wait_after_seconds=0, next_step=None, max_attempts=1, requires_action=None) for step in repeated.steps),
         )
         runner, clicker = self.runner(repeated, max_clicks=6)
         runner.config = replace(runner.config, min_click_interval_seconds=0)

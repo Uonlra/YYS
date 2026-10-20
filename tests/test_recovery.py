@@ -252,6 +252,143 @@ class RecoveryTests(unittest.TestCase):
         capture.assert_not_called()
         self.assertEqual(runner.clicks_done, 0)
 
+    def stable_runner(self, states: list[int]) -> WorkflowRunner:
+        steps = (self.start, self.confirm, self.reward, replace(self.returned, requires_action="reward"))
+        runner = self.runner(states, steps)
+        runner.scenario = replace(runner.scenario, stable_frames=3)
+        return runner
+
+    def test_multiframe_normal_cycle_requires_reward_before_final_start(self) -> None:
+        runner = self.stable_runner([1] * 3 + [2] * 6 + [3] * 6 + [1] * 6)
+        self.assertTrue(runner.run())
+        self.assertEqual(runner.clicks_done, 3)
+        self.assertEqual(runner.cycles_done, 1)
+
+    def test_two_cycles_reset_phase_and_do_not_start_third(self) -> None:
+        cycle = [1] * 3 + [2] * 6 + [3] * 6 + [1] * 6
+        runner = self.stable_runner(cycle * 2)
+        runner.scenario = replace(runner.scenario, repeat_count=2)
+        runner.max_clicks = 18
+        self.assertTrue(runner.run())
+        self.assertEqual(runner.clicks_done, 6)
+        self.assertEqual(runner.cycles_done, 2)
+
+    def test_transient_missing_button_does_not_latch_departure(self) -> None:
+        runner = self.stable_runner([1] * 3 + [0] + [1] * 30)
+        self.assertFalse(runner._run_step(self.start))
+        self.assertEqual(runner.clicks_done, 3)
+        self.assertEqual(runner.failure_reason, "attempts_exhausted")
+
+    def test_stable_departure_prevents_reclick_on_late_start_return(self) -> None:
+        runner = self.stable_runner([1] * 3 + [0] * 3 + [1] * 20)
+        self.assertFalse(runner._run_step(self.start))
+        self.assertEqual(runner.clicks_done, 1)
+
+    def test_transient_later_state_does_not_skip_current_action(self) -> None:
+        runner = self.stable_runner([3] + [1] * 3 + [2] * 3)
+        self.assertTrue(runner._run_step(self.start))
+        self.assertEqual(runner.clicks_done, 1)
+        self.assertEqual(runner._resume_index, 1)
+
+    def test_later_state_is_detected_without_waiting_for_step_timeout(self) -> None:
+        runner = self.stable_runner([0, 3, 3, 3])
+        self.assertTrue(runner._run_step(self.start))
+        self.assertEqual(runner._resume_index, 2)
+        self.assertEqual(runner.clicks_done, 0)
+        self.assertLess(self.clock.now, 100.1)
+
+    def test_continuous_jump_rechecks_reward_and_limits_attempts_to_two(self) -> None:
+        runner = self.stable_runner([3] * 30)
+        with patch.object(runner, "_save_failure"):
+            self.assertFalse(runner.run())
+        self.assertEqual(runner.clicks_done, 2)
+        self.assertEqual(runner.cycles_done, 0)
+
+    def test_premature_start_in_confirm_stage_is_terminal(self) -> None:
+        runner = self.stable_runner([1] * 3)
+        runner._cycle_actions.add("start")
+        self.assertFalse(runner._run_step(self.confirm))
+        self.assertEqual(runner.failure_reason, "phase")
+        self.assertEqual(runner.clicks_done, 0)
+
+    def test_reward_cannot_silently_accept_start_without_reward_attempt(self) -> None:
+        runner = self.stable_runner([1] * 3)
+        self.assertFalse(runner._run_step(self.reward))
+        self.assertEqual(runner.failure_reason, "phase")
+
+    def test_final_observer_rejects_previous_cycles_reward_action(self) -> None:
+        runner = self.stable_runner([1] * 3)
+        runner._cycle_actions.add("reward")
+        runner.scenario = replace(runner.scenario, steps=(runner.scenario.steps[-1],))
+        with patch.object(runner, "_save_failure"):
+            self.assertFalse(runner._run_once())
+        self.assertEqual(runner.failure_reason, "phase")
+
+    def test_transient_overlap_pauses_but_persistent_overlap_stops(self) -> None:
+        runner = self.stable_runner([9, 1, 1, 1, 2, 2, 2])
+        self.assertTrue(runner._run_step(self.start))
+        self.assertEqual(runner.clicks_done, 1)
+        runner = self.stable_runner([9])
+        self.assertFalse(runner._run_step(self.start))
+        self.assertEqual(runner.failure_reason, "ambiguous")
+        self.assertEqual(runner.clicks_done, 0)
+
+    def test_recovery_requires_consecutive_frames_within_each_scan(self) -> None:
+        runner = self.stable_runner([3, 0, 3, 3, 3, 3])
+        self.assertEqual(runner._recover(self.start), 2)
+        runner = self.stable_runner([3, 0, 3, 3, 0, 3])
+        self.assertIsNone(runner._recover(self.start))
+
+    def test_capture_error_breaks_state_confirmation_streak(self) -> None:
+        runner = self.stable_runner([1])
+        frame = runner.source.grab()
+        with patch.object(runner.source, "grab", side_effect=[frame, frame, RuntimeError("capture"), frame, frame, frame]) as grab, patch.object(
+            runner.clicker, "click", side_effect=lambda *_args: setattr(runner.stop_controller, "should_stop", True)
+        ) as click:
+            self.assertFalse(runner._run_step(self.start))
+        self.assertEqual(click.call_count, 1)
+        self.assertEqual(grab.call_count, 6)
+
+    def test_recovery_stops_on_premature_boundary_before_later_reward(self) -> None:
+        runner = self.stable_runner([1] * 3 + [3] * 3)
+        self.assertIsNone(runner._recover(self.confirm))
+        self.assertEqual(runner.failure_reason, "phase")
+        self.assertEqual(runner.clicks_done, 0)
+
+    def test_absence_latches_across_changing_unknown_and_later_state_labels(self) -> None:
+        runner = self.stable_runner([1] * 3 + [0, 3, 0] + [1] * 30)
+        self.assertFalse(runner._run_step(self.start))
+        self.assertEqual(runner.clicks_done, 1)
+
+    def test_incomplete_absence_streak_resets_on_current_reappearance(self) -> None:
+        runner = self.stable_runner([1] * 3 + [0, 0, 1, 0, 0] + [1] * 30)
+        self.assertFalse(runner._run_step(self.start))
+        self.assertEqual(runner.clicks_done, 3)
+
+    def test_guarded_completion_can_observe_after_budget_exhausted(self) -> None:
+        runner = self.stable_runner([3] * 3 + [1] * 6)
+        runner.max_clicks = 1
+        self.assertTrue(runner._run_step(self.reward))
+        self.assertTrue(runner._run_step(runner.scenario.steps[-1]))
+        self.assertEqual(runner.clicks_done, 1)
+
+    def test_stop_during_final_multiframe_confirmation_prevents_completion(self) -> None:
+        runner = self.stable_runner([1])
+        runner._cycle_actions.add("reward")
+        original_grab = runner.source.grab
+        observations = 0
+
+        def grab() -> Frame:
+            nonlocal observations
+            observations += 1
+            if observations == 2:
+                runner.stop_controller.should_stop = True
+            return original_grab()
+
+        with patch.object(runner.source, "grab", side_effect=grab):
+            self.assertFalse(runner._run_step(runner.scenario.steps[-1]))
+        self.assertEqual(runner.cycles_done, 0)
+
 
 if __name__ == "__main__":
     unittest.main()
