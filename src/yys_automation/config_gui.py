@@ -10,6 +10,7 @@ from tkinter import filedialog, messagebox, ttk
 
 import yaml
 
+from src.yys_automation.config import load_config
 from src.yys_automation.scenario import Scenario, ScenarioStep, load_scenario, validate_scenario
 
 
@@ -23,6 +24,7 @@ class ScenarioEditor:
         self.scenario: Scenario | None = None
         self.steps: list[ScenarioStep] = []
         self.process: subprocess.Popen[str] | None = None
+        self.process_cleanup_path: Path | None = None
         self._build_ui()
         if scenario_path is not None and scenario_path.exists():
             self._load_file(scenario_path)
@@ -129,14 +131,19 @@ class ScenarioEditor:
         fd, temp_name = tempfile.mkstemp(prefix="yys_step_", suffix=".yaml", dir=str(self.scenario_path.parent))
         os.close(fd)
         temp_path = Path(temp_name)
-        step = self.steps[index]
-        payload = {
-            "name": f"gui_test_{step.id}",
-            "max_retries": 1,
-            "steps": [self._step_to_yaml(step, temp_path.parent)],
-        }
-        with temp_path.open("w", encoding="utf-8") as file:
-            yaml.safe_dump(payload, file, allow_unicode=True, sort_keys=False)
+        try:
+            step = self.steps[index]
+            payload = {
+                "name": f"gui_test_{step.id}",
+                "max_retries": 1,
+                "steps": [self._step_to_yaml(step, temp_path.parent)],
+            }
+            with temp_path.open("w", encoding="utf-8") as file:
+                yaml.safe_dump(payload, file, allow_unicode=True, sort_keys=False)
+        except Exception as exc:
+            temp_path.unlink(missing_ok=True)
+            messagebox.showerror("步骤测试准备失败", str(exc))
+            return
         self._start_process(temp_path, cleanup_path=temp_path)
 
     def _start_process(self, scenario_path: Path | None, cleanup_path: Path | None = None) -> None:
@@ -154,8 +161,11 @@ class ScenarioEditor:
         try:
             self.process = subprocess.Popen(command, cwd=str(Path(__file__).resolve().parents[2]))
         except OSError as exc:
+            if cleanup_path is not None:
+                cleanup_path.unlink(missing_ok=True)
             messagebox.showerror("启动失败", str(exc))
             return
+        self.process_cleanup_path = cleanup_path
         self.status_var.set("运行中")
         self._poll_process(cleanup_path)
 
@@ -168,13 +178,25 @@ class ScenarioEditor:
             return
         self.status_var.set(f"已结束 ({code})")
         self.process = None
-        if cleanup_path is not None:
-            cleanup_path.unlink(missing_ok=True)
+        self._cleanup_process_file(cleanup_path)
 
     def _stop_process(self) -> None:
         if self.process is not None and self.process.poll() is None:
             self.process.terminate()
+            try:
+                self.process.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                self.process.kill()
+                self.process.wait(timeout=2)
             self.status_var.set("已停止")
+        self.process = None
+        self._cleanup_process_file(self.process_cleanup_path)
+
+    def _cleanup_process_file(self, path: Path | None) -> None:
+        if path is not None:
+            path.unlink(missing_ok=True)
+        if path == self.process_cleanup_path:
+            self.process_cleanup_path = None
 
     def _on_close(self) -> None:
         self._stop_process()
@@ -243,7 +265,12 @@ class ScenarioEditor:
 
     def _validate(self) -> None:
         path = Path(self.path_var.get())
-        errors = validate_scenario(path)
+        try:
+            config = load_config(self.config_path)
+        except Exception as exc:
+            messagebox.showwarning("校验结果", f"配置无效：{exc}")
+            return
+        errors = validate_scenario(path, config)
         if errors:
             messagebox.showwarning("校验结果", "\n".join(errors))
         else:

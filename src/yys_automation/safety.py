@@ -19,6 +19,8 @@ class StopController:
         return self._stop_event.is_set()
 
     def start(self) -> None:
+        if self._listener is not None and self._listener.is_alive():
+            return
         self._listener = keyboard.Listener(on_press=self._on_press, on_release=self._on_release)
         self._listener.start()
 
@@ -26,6 +28,9 @@ class StopController:
         self._stop_event.set()
         if self._listener is not None:
             self._listener.stop()
+            if self._listener.is_alive():
+                self._listener.join(timeout=2)
+            self._listener = None
 
     def _on_press(self, key: keyboard.Key | keyboard.KeyCode) -> None:
         self._pressed.add(key)

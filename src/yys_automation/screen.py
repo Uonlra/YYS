@@ -41,3 +41,12 @@ class ScreenCapture:
         raw = np.array(self._sct.grab(monitor))
         image = cv2.cvtColor(raw, cv2.COLOR_BGRA2BGR)
         return Frame(image=image, left=self.region.left, top=self.region.top)
+
+    def close(self) -> None:
+        self._sct.close()
+
+    def __enter__(self) -> ScreenCapture:
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        self.close()

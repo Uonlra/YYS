@@ -105,6 +105,10 @@ python run.py --config config.yaml --gui scenario.example.yaml
 
 场景配置中的 `max_retries` 只会重试尚未发生点击的失败尝试。只有明确设置 `retry_after_clicks: true`，才会允许点击后的场景从第一步重试；这可能重复已经执行成功的操作，应只用于幂等场景。
 
+启动场景前会预检 YAML 结构、步骤 ID、图片可解码性，以及坐标点击是否位于参考窗口和点击白名单内。配置中布尔值必须使用 YAML 的 `true` / `false`，时间和阈值必须是有限数值。
+
+`max_clicks` 表示本次运行允许的点击动作总数；dry-run 中会按计划点击计数，因此上限和冷却时间在两种模式下行为一致。`startup_delay_seconds` 在自动循环开始识别前等待，也支持紧急停止。`max_retries` 表示场景最多尝试次数，不是额外重试次数。
+
 ## 测试
 
 测试不需要启动目标窗口，使用模拟画面验证场景点击的坐标映射、白名单、点击上限和重试策略：

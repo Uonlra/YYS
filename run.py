@@ -6,6 +6,8 @@ import sys
 import time
 from pathlib import Path
 
+import yaml
+
 from src.yys_automation.config import AppConfig, Region, load_config
 from src.yys_automation.logging_setup import setup_logging
 from src.yys_automation.window import WindowLocator
@@ -68,40 +70,40 @@ def run(config: AppConfig) -> int:
 
     logger = setup_logging(config.log_file)
     stop_controller = StopController(logger)
-    stop_controller.start()
-
-    detector = TemplateDetector(
-        config.target_image,
-        config.threshold,
-        config.template_scale_min,
-        config.template_scale_max,
-        config.template_scale_step,
-    )
-    screen = (
-        WindowScreenCapture(config.window)
-        if config.capture_mode == "window"
-        else ScreenCapture(config.allowed_region)
-    )
-    clicker = HumanLikeClicker(config, logger)
-
-    logger.info("Automation starting. Press Esc or Ctrl+Shift+Q to stop.")
-    logger.info(
-        "Config: target=%s threshold=%.3f dry_run=%s capture_mode=%s",
-        config.target_image,
-        config.threshold,
-        config.dry_run,
-        config.capture_mode,
-    )
-
-    if config.startup_delay_seconds > 0:
-        logger.info("Startup delay: %.1f seconds", config.startup_delay_seconds)
-        sleep_with_stop(config.startup_delay_seconds, stop_controller)
-
     clicks_done = 0
     last_click_at = 0.0
     last_diagnostic_at = 0.0
+    screen = None
 
     try:
+        detector = TemplateDetector(
+            config.target_image,
+            config.threshold,
+            config.template_scale_min,
+            config.template_scale_max,
+            config.template_scale_step,
+        )
+        screen = (
+            WindowScreenCapture(config.window)
+            if config.capture_mode == "window"
+            else ScreenCapture(config.allowed_region)
+        )
+        clicker = HumanLikeClicker(config, logger)
+        stop_controller.start()
+
+        logger.info("Automation starting. Press Esc or Ctrl+Shift+Q to stop.")
+        logger.info(
+            "Config: target=%s threshold=%.3f dry_run=%s capture_mode=%s",
+            config.target_image,
+            config.threshold,
+            config.dry_run,
+            config.capture_mode,
+        )
+
+        if config.startup_delay_seconds > 0:
+            logger.info("Startup delay: %.1f seconds", config.startup_delay_seconds)
+            sleep_with_stop(config.startup_delay_seconds, stop_controller)
+
         while not stop_controller.should_stop:
             try:
                 frame = screen.grab()
@@ -178,7 +180,10 @@ def run(config: AppConfig) -> int:
                 continue
 
             if config.dry_run:
+                clicks_done += 1
+                last_click_at = time.monotonic()
                 logger.info("Dry run: would click x=%d y=%d", x, y)
+                logger.info("Dry run action count=%d", clicks_done)
             else:
                 clicker.click(x, y)
                 clicks_done += 1
@@ -190,6 +195,8 @@ def run(config: AppConfig) -> int:
         logger.info("Stopped by KeyboardInterrupt")
     finally:
         stop_controller.stop()
+        if isinstance(screen, ScreenCapture):
+            screen.close()
         logger.info("Automation stopped. total_clicks=%d", clicks_done)
 
     return 0
@@ -203,7 +210,11 @@ def main() -> int:
         print("Copy config.example.yaml to config.yaml and edit it first.", file=sys.stderr)
         return 2
 
-    config = load_config(config_path)
+    try:
+        config = load_config(config_path)
+    except (OSError, ValueError, KeyError, TypeError, yaml.YAMLError) as exc:
+        print(f"Invalid config: {exc}", file=sys.stderr)
+        return 2
     if args.gui is not None:
         from src.yys_automation.config_gui import launch_gui
 
@@ -213,7 +224,7 @@ def main() -> int:
         from src.yys_automation.scenario import load_scenario, validate_scenario
 
         scenario_path = Path(args.validate_scenario)
-        errors = validate_scenario(scenario_path)
+        errors = validate_scenario(scenario_path, config)
         if errors:
             print("Scenario invalid:")
             for error in errors:
@@ -223,7 +234,7 @@ def main() -> int:
         print(f"Scenario valid: {scenario.name} steps={len(scenario.steps)} retries={scenario.max_retries}")
         return 0
     if args.scenario:
-        from src.yys_automation.scenario import load_scenario
+        from src.yys_automation.scenario import load_scenario, validate_scenario
         from src.yys_automation.safety import StopController
         from src.yys_automation.window_screen import WindowScreenCapture
         from src.yys_automation.workflow import WorkflowRunner
@@ -232,13 +243,20 @@ def main() -> int:
         if config.capture_mode != "window":
             print("Scenario mode requires capture_mode: window")
             return 2
+        scenario_path = Path(args.scenario)
+        errors = validate_scenario(scenario_path, config)
+        if errors:
+            print("Scenario invalid:")
+            for error in errors:
+                print(f"- {error}")
+            return 1
+        scenario = load_scenario(scenario_path)
         logger = setup_logging(config.log_file)
         stop_controller = StopController(logger)
-        stop_controller.start()
-        scenario = load_scenario(Path(args.scenario))
         source = WindowScreenCapture(config.window)
         clicker = WindowMessageClicker(config, logger)
         try:
+            stop_controller.start()
             return 0 if WorkflowRunner(
                 scenario,
                 config,
