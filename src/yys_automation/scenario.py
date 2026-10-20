@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import math
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import yaml
 
@@ -33,6 +33,22 @@ class Scenario:
     steps: tuple[ScenarioStep, ...]
     repeat_count: int | None = 1
     max_cycles: int = 800
+    max_clicks: int | Literal["auto"] | None = None
+
+    @property
+    def cycle_limit(self) -> int:
+        return self.repeat_count if self.repeat_count is not None else self.max_cycles
+
+    @property
+    def clicks_per_cycle(self) -> int:
+        return sum(step.type in {"match_and_click", "click_point"} for step in self.steps)
+
+    def click_budget(self, config: AppConfig) -> tuple[int | None, str]:
+        if self.max_clicks == "auto":
+            return self.clicks_per_cycle * self.cycle_limit, "scenario.auto"
+        if self.max_clicks is not None:
+            return self.max_clicks, "scenario.max_clicks"
+        return config.max_clicks, "config.max_clicks"
 
 
 def load_scenario(path: Path) -> Scenario:
@@ -55,6 +71,15 @@ def load_scenario(path: Path) -> Scenario:
     repeat_count = None if repeat_value is None else _integer(repeat_value, "repeat_count")
     if repeat_count is not None and not 1 <= repeat_count <= max_cycles:
         raise ValueError("scenario repeat_count must be null or between 1 and max_cycles")
+    max_clicks = None
+    if "max_clicks" in raw:
+        value = raw["max_clicks"]
+        if value == "auto":
+            max_clicks = "auto"
+        elif type(value) is int and value >= 0:
+            max_clicks = value
+        else:
+            raise ValueError("scenario max_clicks must be auto or a non-negative integer; omit to use config default")
 
     raw_steps = raw.get("steps")
     if not isinstance(raw_steps, list) or not raw_steps:
@@ -118,6 +143,7 @@ def load_scenario(path: Path) -> Scenario:
         steps=tuple(steps),
         repeat_count=repeat_count,
         max_cycles=max_cycles,
+        max_clicks=max_clicks,
     )
 
 

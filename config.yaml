@@ -31,7 +31,7 @@ scan_interval_seconds: 0.25
 min_click_interval_seconds: 2.0
 
 # 最大点击次数。设为 null 表示不限制，但 MVP 建议先保留限制。
-max_clicks: 10
+max_clicks: 100000
 
 # 鼠标移动到目标点的随机耗时范围。
 move_duration_seconds:

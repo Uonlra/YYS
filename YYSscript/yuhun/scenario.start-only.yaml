@@ -1,4 +1,5 @@
 name: start_only_smoke_test
+max_clicks: auto
 max_retries: 1
 steps:
   - id: start

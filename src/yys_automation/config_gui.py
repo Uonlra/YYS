@@ -136,6 +136,7 @@ class ScenarioEditor:
             payload = {
                 "name": f"gui_test_{step.id}",
                 "max_retries": 1,
+                "max_clicks": "auto",
                 "steps": [self._step_to_yaml(step, temp_path.parent)],
             }
             with temp_path.open("w", encoding="utf-8") as file:
@@ -233,6 +234,7 @@ class ScenarioEditor:
                 "retry_after_clicks": self.scenario.retry_after_clicks if self.scenario else False,
                 "repeat_count": self.scenario.repeat_count if self.scenario else 1,
                 "max_cycles": self.scenario.max_cycles if self.scenario else 800,
+                **({"max_clicks": self.scenario.max_clicks} if self.scenario and self.scenario.max_clicks is not None else {}),
                 "steps": [self._step_to_yaml(step, path.parent) for step in self.steps],
             }
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -255,6 +257,7 @@ class ScenarioEditor:
                 "retry_after_clicks": self.scenario.retry_after_clicks if self.scenario else False,
                 "repeat_count": self.scenario.repeat_count if self.scenario else 1,
                 "max_cycles": self.scenario.max_cycles if self.scenario else 800,
+                **({"max_clicks": self.scenario.max_clicks} if self.scenario and self.scenario.max_clicks is not None else {}),
                 "steps": [self._step_to_yaml(step, path.parent) for step in self.steps],
             }
             path.parent.mkdir(parents=True, exist_ok=True)

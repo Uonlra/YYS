@@ -268,6 +268,48 @@ class WorkflowSafetyTests(unittest.TestCase):
         self.assertEqual(len(clicker.points), 2)
         self.assertEqual(runner.clicks_done, 2)
 
+    def test_auto_budget_uses_each_tasks_click_steps_and_planned_cycles(self) -> None:
+        for clicks, count, expected in ((3, 10, 30), (5, 100, 500), (3, None, 2400)):
+            with self.subTest(clicks=clicks, count=count):
+                steps = tuple(make_step(f"click_{i}", 10, 10) for i in range(clicks))
+                scenario = Scenario("auto", 1, False, steps, repeat_count=count, max_clicks="auto")
+                runner, _ = self.runner(scenario, max_clicks=1)
+                self.assertEqual(runner.max_clicks, expected)
+                self.assertEqual(runner.budget_source, "scenario.auto")
+
+    def test_explicit_task_budget_overrides_global_default(self) -> None:
+        scenario = Scenario("override", 1, False, (make_step("click", 10, 10),), max_clicks=2)
+        runner, clicker = self.runner(scenario, max_clicks=0)
+        self.assertTrue(runner.run())
+        self.assertEqual(runner.max_clicks, 2)
+        self.assertEqual(runner.budget_source, "scenario.max_clicks")
+        self.assertEqual(len(clicker.points), 1)
+
+    def test_zero_task_budget_stops_before_click(self) -> None:
+        scenario = Scenario("disabled", 1, False, (make_step("click", 10, 10),), max_clicks=0)
+        runner, clicker = self.runner(scenario)
+        self.assertFalse(runner.run())
+        self.assertEqual(clicker.points, [])
+
+    def test_auto_budget_counts_failed_clicks_without_granting_retry_allowance(self) -> None:
+        scenario = Scenario("retry", 3, True, (make_step("click", 10, 10),), max_clicks="auto")
+        runner, clicker = self.runner(scenario)
+        runner.config = replace(runner.config, min_click_interval_seconds=0)
+        with patch.object(clicker, "click", side_effect=RuntimeError("delivery unknown")) as send:
+            self.assertFalse(runner.run())
+        self.assertEqual(send.call_count, 1)
+        self.assertEqual(runner.clicks_done, 1)
+        self.assertEqual(runner.max_clicks, 1)
+
+    def test_auto_budget_excludes_wait_steps_and_logs_source(self) -> None:
+        step = replace(make_step("wait", 0, 0), type="wait", timeout_seconds=0.001)
+        scenario = Scenario("observe", 1, False, (step,), max_clicks="auto")
+        runner, clicker = self.runner(scenario)
+        with self.assertLogs(self.logger, level="INFO") as logs:
+            self.assertTrue(runner.run())
+        self.assertTrue(any("max_clicks=0 source=scenario.auto" in entry for entry in logs.output))
+        self.assertEqual(clicker.points, [])
+
     def test_wait_for_image_times_out_when_target_never_appears(self) -> None:
         step = replace(make_step("observe", 0, 0), type="wait_for_image", image=Path("unused.png"), timeout_seconds=0.01)
         runner, clicker = self.runner(Scenario("timeout", 1, False, (step,)))

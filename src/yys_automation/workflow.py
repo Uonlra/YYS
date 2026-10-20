@@ -45,18 +45,25 @@ class WorkflowRunner:
         self.last_click_at = 0.0
         self._attempt_clicked = False
         self.cycles_done = 0
+        self.max_clicks, self.budget_source = scenario.click_budget(config)
 
     def run(self) -> bool:
-        cycle_limit = self.scenario.repeat_count or self.scenario.max_cycles
-        clicks_per_cycle = sum(step.type in {"match_and_click", "click_point"} for step in self.scenario.steps)
+        cycle_limit = self.scenario.cycle_limit
+        clicks_per_cycle = self.scenario.clicks_per_cycle
+        self.logger.info(
+            "Scenario budget: clicks_per_cycle=%d cycles=%d max_clicks=%s source=%s dry_run=%s",
+            clicks_per_cycle, cycle_limit,
+            self.max_clicks if self.max_clicks is not None else "unlimited",
+            self.budget_source, self.config.dry_run,
+        )
         for cycle in range(1, cycle_limit + 1):
             if self._should_stop():
                 return False
-            if self.config.max_clicks is not None and self.clicks_done + clicks_per_cycle > self.config.max_clicks:
+            if self.max_clicks is not None and self.clicks_done + clicks_per_cycle > self.max_clicks:
                 self.logger.warning(
                     "Scenario stopped before cycle %d: insufficient click budget "
                     "done=%d max=%d required=%d completed_cycles=%d",
-                    cycle, self.clicks_done, self.config.max_clicks, clicks_per_cycle, self.cycles_done,
+                    cycle, self.clicks_done, self.max_clicks, clicks_per_cycle, self.cycles_done,
                 )
                 return False
             self.logger.info("Scenario cycle %d/%d: %s", cycle, cycle_limit, self.scenario.name)
@@ -118,7 +125,7 @@ class WorkflowRunner:
 
         deadline = time.monotonic() + step.timeout_seconds
         while time.monotonic() < deadline and not self._should_stop():
-            if step.type != "wait_for_image" and self.config.max_clicks is not None and self.clicks_done >= self.config.max_clicks:
+            if step.type != "wait_for_image" and self.max_clicks is not None and self.clicks_done >= self.max_clicks:
                 self.logger.warning("Step %s rejected: max clicks reached", step.id)
                 return False
             if step.type != "wait_for_image" and self.clicks_done:
@@ -191,7 +198,7 @@ class WorkflowRunner:
                 allowed_region.height,
             )
             return False
-        if self.config.max_clicks is not None and self.clicks_done >= self.config.max_clicks:
+        if self.max_clicks is not None and self.clicks_done >= self.max_clicks:
             self.logger.warning("Step %s click rejected: max clicks reached", step.id)
             return False
         return self._perform_click(step, x, y)

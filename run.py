@@ -231,7 +231,14 @@ def main() -> int:
                 print(f"- {error}")
             return 1
         scenario = load_scenario(scenario_path)
-        print(f"Scenario valid: {scenario.name} steps={len(scenario.steps)} retries={scenario.max_retries}")
+        click_budget, budget_source = scenario.click_budget(config)
+        print(
+            f"Scenario valid: {scenario.name} steps={len(scenario.steps)} "
+            f"cycles={scenario.cycle_limit} retries={scenario.max_retries} "
+            f"clicks_per_cycle={scenario.clicks_per_cycle} "
+            f"max_clicks={click_budget if click_budget is not None else 'unlimited'} "
+            f"budget_source={budget_source}"
+        )
         return 0
     if args.scenario:
         from src.yys_automation.scenario import load_scenario, validate_scenario

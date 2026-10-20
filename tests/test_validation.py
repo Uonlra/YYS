@@ -4,6 +4,7 @@ import tempfile
 import unittest
 from dataclasses import replace
 from pathlib import Path
+from unittest.mock import Mock, patch
 
 import cv2
 import numpy as np
@@ -133,6 +134,48 @@ class ValidationTests(unittest.TestCase):
                     "steps": [{"id": "pause", "type": "wait"}],
                 }), encoding="utf-8")
                 self.assertTrue(validate_scenario(path))
+
+    def test_task_budget_rejects_invalid_values(self) -> None:
+        path = self.root / "budget.yaml"
+        for value in (None, -1, True, 1.5, "10", "unlimited", float("inf")):
+            with self.subTest(value=value):
+                path.write_text(yaml.safe_dump({
+                    "max_clicks": value, "steps": [{"id": "pause", "type": "wait"}],
+                }), encoding="utf-8")
+                self.assertTrue(any("max_clicks" in error for error in validate_scenario(path)))
+
+    def test_task_budget_preserves_missing_auto_and_integer_settings(self) -> None:
+        path = self.root / "budget.yaml"
+        for settings, expected in (({}, None), ({"max_clicks": "auto"}, "auto"), ({"max_clicks": 0}, 0), ({"max_clicks": 20}, 20)):
+            with self.subTest(settings=settings):
+                path.write_text(yaml.safe_dump({
+                    **settings, "steps": [{"id": "pause", "type": "wait"}],
+                }), encoding="utf-8")
+                self.assertEqual(load_scenario(path).max_clicks, expected)
+
+    def test_gui_saves_preserve_task_budget_and_global_fallback(self) -> None:
+        from src.yys_automation.config_gui import ScenarioEditor
+
+        path = self.root / "gui.yaml"
+        for value in (None, "auto", 0, 500):
+            for method in ("_save", "_save_silently"):
+                with self.subTest(value=value, method=method):
+                    payload = {"steps": [{"id": "pause", "type": "wait"}]}
+                    if value is not None:
+                        payload["max_clicks"] = value
+                    path.write_text(yaml.safe_dump(payload), encoding="utf-8")
+                    editor = ScenarioEditor.__new__(ScenarioEditor)
+                    editor.scenario = load_scenario(path)
+                    editor.steps = list(editor.scenario.steps)
+                    editor.path_var = Mock()
+                    editor.path_var.get.return_value = str(path)
+                    with patch("src.yys_automation.config_gui.messagebox") as messages:
+                        getattr(editor, method)()
+                        messages.showerror.assert_not_called()
+                    saved = yaml.safe_load(path.read_text(encoding="utf-8"))
+                    self.assertEqual(saved.get("max_clicks"), value)
+                    if value is None:
+                        self.assertNotIn("max_clicks", saved)
 
 
 if __name__ == "__main__":

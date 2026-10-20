@@ -1,4 +1,5 @@
 name: reward_once
+max_clicks: auto
 max_retries: 1
 retry_after_clicks: false
 repeat_count: 1

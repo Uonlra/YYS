@@ -48,7 +48,7 @@ YYS/
     test_workflow.py
 ```
 
-窗口模式下，`allowed_region` 使用窗口参考坐标；桌面模式下使用屏幕绝对坐标。场景模式要求 `capture_mode: window`。场景中的模板点击和坐标点击都会经过该白名单检查，并同时受到 `max_clicks` 和 `min_click_interval_seconds` 限制。
+窗口模式下，`allowed_region` 使用窗口参考坐标；桌面模式下使用屏幕绝对坐标。场景模式要求 `capture_mode: window`。场景中的模板点击和坐标点击都会经过该白名单检查，并受到场景点击预算与 `min_click_interval_seconds` 限制。
 
 ## 安装
 
@@ -107,7 +107,7 @@ python run.py --config config.yaml --gui scenario.example.yaml
 
 启动场景前会预检 YAML 结构、步骤 ID、图片可解码性，以及坐标点击是否位于参考窗口和点击白名单内。配置中布尔值必须使用 YAML 的 `true` / `false`，时间和阈值必须是有限数值。
 
-`max_clicks` 表示本次运行允许的点击动作总数；dry-run 中会按计划点击计数，因此上限和冷却时间在两种模式下行为一致。`startup_delay_seconds` 在自动循环开始识别前等待，也支持紧急停止。`max_retries` 表示场景最多尝试次数，不是额外重试次数。
+普通识别循环使用 `config.yaml` 的 `max_clicks`。场景可在 YAML 中独立配置 `max_clicks`：`auto` 按点击步骤数和轮数计算预算；整数设置该场景的明确上限；省略时使用全局配置。dry-run 中也会按计划点击计数。`startup_delay_seconds` 在普通识别循环开始识别前等待，也支持紧急停止。`max_retries` 表示每轮场景最多尝试次数，不是额外重试次数。
 
 ## 单次领奖流程
 
@@ -118,7 +118,7 @@ python run.py --config config.yaml --gui scenario.example.yaml
 .\.venv\Scripts\python.exe -B run.py --config config.yaml --scenario YYSscript/yuhun/scenario.reward-once.yaml
 ```
 
-运行前保持目标窗口打开，处于 start 界面；配置使用 `capture_mode: window`、`dry_run: false`，且 `max_clicks` 至少为 3。confirm 最多等待 180 秒，reward 和返回 start 各等待 60 秒，可按实际流程调整。任一步超时或失败都会停止，本流程不自动重试。
+运行前保持目标窗口打开，处于 start 界面；配置使用 `capture_mode: window`、`dry_run: false`。场景自动设置三次点击预算，不需要为此修改全局 `max_clicks`。confirm 最多等待 180 秒，reward 和返回 start 各等待 60 秒，可按实际流程调整。任一步超时或失败都会停止，本流程不自动重试。
 
 场景点击使用窗口消息，可能与已验证的普通鼠标点击效果不同；首次请观察按钮是否响应。看到 `Scenario completed: reward_once` 表示已发出三次点击并重新识别到 start，不代表已校验实际奖励数量。dry-run 不会推动界面变化，因此从 start 界面运行通常会在等待 confirm 时超时。
 
@@ -144,9 +144,30 @@ repeat_count: null
 max_cycles: 800
 ```
 
-`repeat_count: null` 表示持续运行，直到手动停止、发生错误、点击预算不足或达到 `max_cycles` 安全上限。未来定次运行只需将 `repeat_count` 改为 1 到 `max_cycles` 之间的整数，例如 `repeat_count: 10`。未写 `repeat_count` 的旧场景仍只执行一次。`max_retries` 仍是每轮的最大尝试次数，与轮数无关。
+`repeat_count: null` 表示重复至 `max_cycles` 安全上限或提前停止。未来定次运行只需将 `repeat_count` 改为 1 到 `max_cycles` 之间的整数，例如 `repeat_count: 10`。未写 `repeat_count` 的旧场景仍只执行一次。`max_retries` 仍是每轮的最大尝试次数，与轮数无关。
 
-全局 `max_clicks` 和冷却时间在所有轮次之间累计，不会每轮重置。本流程每轮三次点击；运行 800 轮需要 `config.yaml` 的 `max_clicks` 至少为 2400。当前配置若为 10，只能完成三轮，第四轮开始前会因不足三次点击额度退出，避免半途耗尽额度。初次建议以 `max_clicks: 6` 验证两轮，再按需提高，代码不会自动放宽配置。
+重复流程设置 `max_clicks: auto`，预算为每轮点击步骤数乘以计划轮数，不需要更改全局配置。本流程每轮点击三次，800 轮的自动预算为 2400。预算在所有轮次之间累计，不会每轮重置；若剩余额度不足以完成下一整轮，程序会在新一轮开始前停止。首次建议将 `repeat_count` 临时设为 2 验证两轮，再恢复 `null`。dry-run 界面不会推进状态，实际重复流程要观察游戏对每次窗口消息点击的响应。
+
+## 场景点击预算
+
+| 场景字段 | 有效预算 | 与全局配置的关系 |
+| --- | --- | --- |
+| 不写 `max_clicks` | `config.yaml` 中的值 | 沿用已有场景行为，全局 `null` 表示不限点击数 |
+| `max_clicks: auto` | 每轮点击步骤数乘以计划轮数 | 覆盖全局默认值 |
+| `max_clicks: 500` | 本场景最多 500 次点击 | 覆盖全局默认值 |
+| `max_clicks: 0` | 禁止点击，仍可执行等待与观察步骤 | 覆盖全局默认值 |
+
+场景里的 `null`、负数、布尔值和数字字符串均不接受；要继承全局设置请省略字段。全局值是默认值，不是与场景预算取最小值的硬上限。启动日志和 `--validate-scenario` 会显示每轮点击数、计划轮数、有效预算和来源。
+
+例如，每轮五次点击、计划执行 100 轮的不同任务，只需设置：
+
+```yaml
+repeat_count: 100
+max_cycles: 800
+max_clicks: auto
+```
+
+自动预算为 500；`wait` 和 `wait_for_image` 不计入点击数。点击发送失败可能已产生副作用，因此仍会消耗额度。重试共享原预算，不额外增加额度；允许点击后重试的任务如需额外额度，请显式设置整数上限。自动计算适用于当前每个点击步骤最多发送一次的顺序流程；后续引入分支或步骤内多次点击时，需要同时扩展预算计算和相应测试。
 
 ## 多流程约定
 
@@ -161,7 +182,7 @@ max_cycles: 800
 | `click_point` | 点击窗口参考坐标 | `x`、`y`、`timeout_seconds` |
 | `wait` | 固定等待 | `timeout_seconds` |
 
-所有步骤都可使用 `wait_after_seconds`。同一流程中的步骤 ID 应唯一，优先使用模板点击和界面确认，而不是固定坐标。循环参数适用于所有场景，GUI 保存已有场景时会保留循环参数，测试当前步骤仍只执行一次。后续有实际需求时，再扩展步骤识别区域、连续多帧确认或分支，不把业务流程写死在 Python 中。
+所有步骤都可使用 `wait_after_seconds`。同一流程中的步骤 ID 应唯一，优先使用模板点击和界面确认，而不是固定坐标。循环和场景级点击预算适用于所有场景，GUI 保存已有场景时会保留这些参数，测试当前步骤仍只执行一次。后续有实际需求时，再扩展步骤识别区域、连续多帧确认或分支，不把业务流程写死在 Python 中。
 
 ## 测试
 
