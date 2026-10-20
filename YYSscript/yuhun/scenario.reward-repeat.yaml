@@ -6,6 +6,7 @@ repeat_count: null
 max_cycles: 800
 recovery_scans: 2
 recovery_interval_seconds: 1.0
+stable_frames: 3
 
 steps:
   - id: start
@@ -42,6 +43,7 @@ steps:
     wait_after_seconds: 1.0
 
   - id: returned_to_start
+    requires_action: reward
     type: wait_for_image
     image: ../../assets/targets/start.png
     threshold: 0.86

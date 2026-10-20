@@ -94,6 +94,7 @@ class ScenarioEditor:
             ("next", "预期下一步骤"),
             ("response", "点击响应等待"),
             ("recover", "恢复步骤(逗号)"),
+            ("requires_action", "requires_action"),
         ]
         for key, label in fields:
             row = ttk.Frame(right)
@@ -140,7 +141,7 @@ class ScenarioEditor:
         os.close(fd)
         temp_path = Path(temp_name)
         try:
-            step = replace(self.steps[index], next_step=None, max_attempts=1, recover_to=())
+            step = replace(self.steps[index], next_step=None, max_attempts=1, recover_to=(), requires_action=None)
             payload = {
                 "name": f"gui_test_{step.id}",
                 "max_retries": 1,
@@ -244,6 +245,7 @@ class ScenarioEditor:
                 "max_cycles": self.scenario.max_cycles if self.scenario else 800,
                 "recovery_scans": self.scenario.recovery_scans if self.scenario else 0,
                 "recovery_interval_seconds": self.scenario.recovery_interval_seconds if self.scenario else 1,
+                "stable_frames": self.scenario.stable_frames if self.scenario else 1,
                 **({"max_clicks": self.scenario.max_clicks} if self.scenario and self.scenario.max_clicks is not None else {}),
                 "steps": [self._step_to_yaml(step, path.parent) for step in self.steps],
             }
@@ -269,6 +271,7 @@ class ScenarioEditor:
                 "max_cycles": self.scenario.max_cycles if self.scenario else 800,
                 "recovery_scans": self.scenario.recovery_scans if self.scenario else 0,
                 "recovery_interval_seconds": self.scenario.recovery_interval_seconds if self.scenario else 1,
+                "stable_frames": self.scenario.stable_frames if self.scenario else 1,
                 **({"max_clicks": self.scenario.max_clicks} if self.scenario and self.scenario.max_clicks is not None else {}),
                 "steps": [self._step_to_yaml(step, path.parent) for step in self.steps],
             }
@@ -324,6 +327,7 @@ class ScenarioEditor:
             next_step=self.form["next"].get().strip() or None,
             response_timeout_seconds=float(self.form["response"].get() or 3),
             recover_to=tuple(value.strip() for value in self.form["recover"].get().split(",") if value.strip()),
+            requires_action=self.form["requires_action"].get().strip() or None,
         )
 
     def _add_step(self) -> None:
@@ -389,6 +393,7 @@ class ScenarioEditor:
         self.form["next"].set(step.next_step or "")
         self.form["response"].set(str(step.response_timeout_seconds))
         self.form["recover"].set(",".join(step.recover_to))
+        self.form["requires_action"].set(step.requires_action or "")
 
     @staticmethod
     def _step_values(step: ScenarioStep) -> tuple[str, ...]:
@@ -416,6 +421,8 @@ class ScenarioEditor:
         }
         if step.next_step is not None:
             data["next_step"] = step.next_step
+        if step.requires_action is not None:
+            data["requires_action"] = step.requires_action
         if step.image is not None:
             image_path = Path(os.path.relpath(step.image, base_dir))
             data["image"] = str(image_path).replace(os.sep, "/")

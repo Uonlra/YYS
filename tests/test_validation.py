@@ -214,10 +214,10 @@ class ValidationTests(unittest.TestCase):
         from src.yys_automation.config_gui import ScenarioEditor
 
         path = self.root / "recovery.yaml"
-        payload = {"recovery_scans": 2, "recovery_interval_seconds": 1.5, "steps": [
+        payload = {"stable_frames": 3, "recovery_scans": 2, "recovery_interval_seconds": 1.5, "steps": [
             {"id": "first", "type": "match_and_click", "image": "target.png", "max_attempts": 3,
              "next_step": "second", "response_timeout_seconds": 2.5, "recover_to": ["second"]},
-            {"id": "second", "type": "wait_for_image", "image": "target.png"},
+            {"id": "second", "type": "wait_for_image", "image": "target.png", "requires_action": "first"},
         ]}
         for method in ("_save", "_save_silently"):
             with self.subTest(method=method):
@@ -232,6 +232,26 @@ class ValidationTests(unittest.TestCase):
                     getattr(editor, method)()
                     messages.showerror.assert_not_called()
                 self.assertEqual(load_scenario(path), original)
+
+    def test_stable_frames_validation(self) -> None:
+        path = self.root / "stable.yaml"
+        for value in (0, -1, 11, True, 1.5, None):
+            with self.subTest(value=value):
+                path.write_text(yaml.safe_dump({"stable_frames": value, "steps": [{"id": "pause", "type": "wait"}]}), encoding="utf-8")
+                self.assertTrue(any("stable_frames" in error for error in validate_scenario(path)))
+
+    def test_requires_action_must_reference_earlier_click_and_only_guard_observer(self) -> None:
+        path = self.root / "phase.yaml"
+        for target, step_type in (("missing", "wait_for_image"), ("end", "wait_for_image"),
+                                  ("pause", "wait_for_image"), (True, "wait_for_image"),
+                                  ("click", "match_and_click")):
+            with self.subTest(target=target, step_type=step_type):
+                path.write_text(yaml.safe_dump({"steps": [
+                    {"id": "click", "type": "click_point", "x": 1, "y": 1},
+                    {"id": "pause", "type": "wait"},
+                    {"id": "end", "type": step_type, "image": "target.png", "requires_action": target},
+                ]}), encoding="utf-8")
+                self.assertTrue(any("requires_action" in error for error in validate_scenario(path)))
 
 
 if __name__ == "__main__":

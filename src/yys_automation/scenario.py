@@ -27,6 +27,7 @@ class ScenarioStep:
     next_step: str | None = None
     response_timeout_seconds: float = 3.0
     recover_to: tuple[str, ...] = ()
+    requires_action: str | None = None
 
 
 @dataclass(frozen=True)
@@ -40,6 +41,7 @@ class Scenario:
     max_clicks: int | Literal["auto"] | None = None
     recovery_scans: int = 0
     recovery_interval_seconds: float = 1.0
+    stable_frames: int = 1
 
     @property
     def cycle_limit(self) -> int:
@@ -87,6 +89,9 @@ def load_scenario(path: Path) -> Scenario:
     recovery_interval = _finite_float(raw.get("recovery_interval_seconds", 1), "recovery_interval_seconds")
     if recovery_interval <= 0:
         raise ValueError("recovery_interval_seconds must be positive")
+    stable_frames = _integer(raw.get("stable_frames", 1), "stable_frames")
+    if not 1 <= stable_frames <= 10:
+        raise ValueError("stable_frames must be between 1 and 10")
     max_clicks = None
     if "max_clicks" in raw:
         value = raw["max_clicks"]
@@ -142,6 +147,11 @@ def load_scenario(path: Path) -> Scenario:
         next_step = item.get("next_step")
         response_timeout = _finite_float(item.get("response_timeout_seconds", 3), "response_timeout_seconds")
         recover_to = item.get("recover_to", [])
+        requires_action = item.get("requires_action")
+        if requires_action is not None and (not isinstance(requires_action, str) or not requires_action):
+            raise ValueError(f"step {step_id}: requires_action must be a non-empty step id")
+        if requires_action is not None and step_type != "wait_for_image":
+            raise ValueError(f"step {step_id}: requires_action is only supported on wait_for_image")
         if not 1 <= max_attempts <= 3:
             raise ValueError(f"step {step_id}: max_attempts must be between 1 and 3")
         if next_step is not None and (not isinstance(next_step, str) or not next_step):
@@ -169,11 +179,16 @@ def load_scenario(path: Path) -> Scenario:
                 next_step=next_step,
                 response_timeout_seconds=response_timeout,
                 recover_to=tuple(recover_to),
+                requires_action=requires_action,
             )
         )
 
     indices = {step.id: index for index, step in enumerate(steps)}
     for index, step in enumerate(steps):
+        if step.requires_action is not None:
+            action_index = indices.get(step.requires_action)
+            if action_index is None or action_index >= index or steps[action_index].type not in {"match_and_click", "click_point"}:
+                raise ValueError(f"step {step.id}: requires_action must reference an earlier click step")
         if step.next_step is not None and indices.get(step.next_step) != index + 1:
             raise ValueError(f"step {step.id}: next_step must reference the immediately following step")
         for target_id in (*step.recover_to, *((step.next_step,) if step.next_step else ())):
@@ -195,6 +210,7 @@ def load_scenario(path: Path) -> Scenario:
         max_clicks=max_clicks,
         recovery_scans=recovery_scans,
         recovery_interval_seconds=recovery_interval,
+        stable_frames=stable_frames,
     )
 
 
