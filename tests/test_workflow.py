@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import unittest
+import tempfile
 from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
@@ -76,12 +77,14 @@ class WorkflowSafetyTests(unittest.TestCase):
     def setUp(self) -> None:
         self.logger = logging.getLogger("test_workflow")
         self.frame = Frame(np.zeros((50, 100, 3), dtype=np.uint8), 1000, 500, 2, 2)
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
 
     def runner(self, scenario: Scenario, *, max_clicks: int | None = 10) -> tuple[WorkflowRunner, FakeClicker]:
         clicker = FakeClicker()
         runner = WorkflowRunner(
             scenario,
-            make_config(max_clicks=max_clicks),
+            replace(make_config(max_clicks=max_clicks), log_file=Path(self.temp.name) / "automation.log"),
             FakeSource(self.frame),
             clicker,
             FakeStop(),
@@ -171,7 +174,7 @@ class WorkflowSafetyTests(unittest.TestCase):
         scenario = load_scenario(path)
         self.assertEqual([step.id for step in scenario.steps], ["start", "confirm", "reward", "returned_to_start"])
         self.assertEqual([step.image.name for step in scenario.steps], ["start.png", "confirm.png", "reward.png", "start.png"])
-        scenario = replace(scenario, steps=tuple(replace(step, wait_after_seconds=0) for step in scenario.steps))
+        scenario = replace(scenario, steps=tuple(replace(step, wait_after_seconds=0, next_step=None, max_attempts=1) for step in scenario.steps))
         runner, clicker = self.runner(scenario, max_clicks=3)
         runner.config = replace(runner.config, min_click_interval_seconds=0)
 
@@ -202,7 +205,7 @@ class WorkflowSafetyTests(unittest.TestCase):
         self.assertEqual(repeated.max_cycles, 800)
         repeated = replace(
             repeated, max_cycles=2,
-            steps=tuple(replace(step, wait_after_seconds=0) for step in repeated.steps),
+            steps=tuple(replace(step, wait_after_seconds=0, next_step=None, max_attempts=1) for step in repeated.steps),
         )
         runner, clicker = self.runner(repeated, max_clicks=6)
         runner.config = replace(runner.config, min_click_interval_seconds=0)
@@ -315,6 +318,10 @@ class WorkflowSafetyTests(unittest.TestCase):
         runner, clicker = self.runner(Scenario("timeout", 1, False, (step,)))
         with patch("src.yys_automation.workflow.TemplateDetector") as detector:
             detector.return_value.find_best.return_value = None
+            detector.return_value.last_score = 0.1
+            detector.return_value.threshold = 0.86
+            detector.return_value.last_location = (0, 0)
+            detector.return_value.last_scale = 1.0
             self.assertFalse(runner.run())
         self.assertEqual(clicker.points, [])
 

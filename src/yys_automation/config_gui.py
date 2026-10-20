@@ -5,6 +5,7 @@ import subprocess
 import sys
 import tempfile
 import tkinter as tk
+from dataclasses import replace
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
@@ -89,6 +90,10 @@ class ScenarioEditor:
             ("x", "参考 X"),
             ("y", "参考 Y"),
             ("wait", "执行后等待"),
+            ("attempts", "最多点击次数"),
+            ("next", "预期下一步骤"),
+            ("response", "点击响应等待"),
+            ("recover", "恢复步骤(逗号)"),
         ]
         for key, label in fields:
             row = ttk.Frame(right)
@@ -122,6 +127,9 @@ class ScenarioEditor:
         self._start_process(self.scenario_path)
 
     def _test_current_step(self) -> None:
+        if self.process is not None and self.process.poll() is None:
+            messagebox.showinfo("任务运行中", "请先停止当前任务")
+            return
         index = self._selected_index()
         if index is None:
             messagebox.showwarning("未选择步骤", "请先选择一个步骤")
@@ -132,7 +140,7 @@ class ScenarioEditor:
         os.close(fd)
         temp_path = Path(temp_name)
         try:
-            step = self.steps[index]
+            step = replace(self.steps[index], next_step=None, max_attempts=1, recover_to=())
             payload = {
                 "name": f"gui_test_{step.id}",
                 "max_retries": 1,
@@ -234,6 +242,8 @@ class ScenarioEditor:
                 "retry_after_clicks": self.scenario.retry_after_clicks if self.scenario else False,
                 "repeat_count": self.scenario.repeat_count if self.scenario else 1,
                 "max_cycles": self.scenario.max_cycles if self.scenario else 800,
+                "recovery_scans": self.scenario.recovery_scans if self.scenario else 0,
+                "recovery_interval_seconds": self.scenario.recovery_interval_seconds if self.scenario else 1,
                 **({"max_clicks": self.scenario.max_clicks} if self.scenario and self.scenario.max_clicks is not None else {}),
                 "steps": [self._step_to_yaml(step, path.parent) for step in self.steps],
             }
@@ -257,6 +267,8 @@ class ScenarioEditor:
                 "retry_after_clicks": self.scenario.retry_after_clicks if self.scenario else False,
                 "repeat_count": self.scenario.repeat_count if self.scenario else 1,
                 "max_cycles": self.scenario.max_cycles if self.scenario else 800,
+                "recovery_scans": self.scenario.recovery_scans if self.scenario else 0,
+                "recovery_interval_seconds": self.scenario.recovery_interval_seconds if self.scenario else 1,
                 **({"max_clicks": self.scenario.max_clicks} if self.scenario and self.scenario.max_clicks is not None else {}),
                 "steps": [self._step_to_yaml(step, path.parent) for step in self.steps],
             }
@@ -308,6 +320,10 @@ class ScenarioEditor:
             x=int(x_value) if x_value else None,
             y=int(y_value) if y_value else None,
             wait_after_seconds=float(self.form["wait"].get() or 0.5),
+            max_attempts=int(self.form["attempts"].get() or 1),
+            next_step=self.form["next"].get().strip() or None,
+            response_timeout_seconds=float(self.form["response"].get() or 3),
+            recover_to=tuple(value.strip() for value in self.form["recover"].get().split(",") if value.strip()),
         )
 
     def _add_step(self) -> None:
@@ -369,6 +385,10 @@ class ScenarioEditor:
         self.form["x"].set(str(step.x or ""))
         self.form["y"].set(str(step.y or ""))
         self.form["wait"].set(str(step.wait_after_seconds))
+        self.form["attempts"].set(str(step.max_attempts))
+        self.form["next"].set(step.next_step or "")
+        self.form["response"].set(str(step.response_timeout_seconds))
+        self.form["recover"].set(",".join(step.recover_to))
 
     @staticmethod
     def _step_values(step: ScenarioStep) -> tuple[str, ...]:
@@ -390,7 +410,12 @@ class ScenarioEditor:
             "type": step.type,
             "timeout_seconds": step.timeout_seconds,
             "wait_after_seconds": step.wait_after_seconds,
+            "max_attempts": step.max_attempts,
+            "response_timeout_seconds": step.response_timeout_seconds,
+            "recover_to": list(step.recover_to),
         }
+        if step.next_step is not None:
+            data["next_step"] = step.next_step
         if step.image is not None:
             image_path = Path(os.path.relpath(step.image, base_dir))
             data["image"] = str(image_path).replace(os.sep, "/")

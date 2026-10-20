@@ -177,6 +177,62 @@ class ValidationTests(unittest.TestCase):
                     if value is None:
                         self.assertNotIn("max_clicks", saved)
 
+    def test_state_recovery_rejects_invalid_references_and_retry_settings(self) -> None:
+        path = self.root / "recovery.yaml"
+        cases = [
+            {"max_attempts": 0}, {"max_attempts": 4}, {"max_attempts": True},
+            {"max_attempts": 2}, {"next_step": "missing"}, {"next_step": "first"},
+            {"recover_to": ["first"]}, {"recover_to": ["missing"]},
+            {"recover_to": "second"}, {"response_timeout_seconds": 0},
+            {"response_timeout_seconds": float("inf")},
+        ]
+        for settings in cases:
+            with self.subTest(settings=settings):
+                path.write_text(yaml.safe_dump({"steps": [
+                    {"id": "first", "type": "match_and_click", "image": "target.png", **settings},
+                    {"id": "second", "type": "wait_for_image", "image": "target.png"},
+                ]}), encoding="utf-8")
+                self.assertTrue(validate_scenario(path))
+
+    def test_recovery_cannot_target_unchecked_coordinate_step(self) -> None:
+        path = self.root / "coordinate.yaml"
+        path.write_text(yaml.safe_dump({"steps": [
+            {"id": "first", "type": "match_and_click", "image": "target.png", "recover_to": ["second"]},
+            {"id": "second", "type": "click_point", "image": "target.png", "x": 10, "y": 10},
+        ]}), encoding="utf-8")
+        self.assertTrue(any("revalidate" in error for error in validate_scenario(path)))
+
+    def test_recovery_scan_limits_and_intervals_are_validated(self) -> None:
+        path = self.root / "recovery.yaml"
+        for settings in ({"recovery_scans": 3}, {"recovery_scans": -1}, {"recovery_scans": True},
+                         {"recovery_interval_seconds": 0}, {"recovery_interval_seconds": float("nan")}):
+            with self.subTest(settings=settings):
+                path.write_text(yaml.safe_dump({**settings, "steps": [{"id": "pause", "type": "wait"}]}), encoding="utf-8")
+                self.assertTrue(validate_scenario(path))
+
+    def test_gui_roundtrip_preserves_state_confirmation_and_recovery(self) -> None:
+        from src.yys_automation.config_gui import ScenarioEditor
+
+        path = self.root / "recovery.yaml"
+        payload = {"recovery_scans": 2, "recovery_interval_seconds": 1.5, "steps": [
+            {"id": "first", "type": "match_and_click", "image": "target.png", "max_attempts": 3,
+             "next_step": "second", "response_timeout_seconds": 2.5, "recover_to": ["second"]},
+            {"id": "second", "type": "wait_for_image", "image": "target.png"},
+        ]}
+        for method in ("_save", "_save_silently"):
+            with self.subTest(method=method):
+                path.write_text(yaml.safe_dump(payload), encoding="utf-8")
+                original = load_scenario(path)
+                editor = ScenarioEditor.__new__(ScenarioEditor)
+                editor.scenario = original
+                editor.steps = list(original.steps)
+                editor.path_var = Mock()
+                editor.path_var.get.return_value = str(path)
+                with patch("src.yys_automation.config_gui.messagebox") as messages:
+                    getattr(editor, method)()
+                    messages.showerror.assert_not_called()
+                self.assertEqual(load_scenario(path), original)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 
@@ -9,7 +10,10 @@ def setup_logging(log_file: Path) -> logging.Logger:
 
     logger = logging.getLogger("yys_automation")
     logger.setLevel(logging.INFO)
-    logger.handlers.clear()
+    logger.propagate = False
+    for handler in logger.handlers[:]:
+        logger.removeHandler(handler)
+        handler.close()
 
     formatter = logging.Formatter(
         fmt="%(asctime)s %(levelname)s %(message)s",
@@ -20,7 +24,9 @@ def setup_logging(log_file: Path) -> logging.Logger:
     console_handler.setFormatter(formatter)
     logger.addHandler(console_handler)
 
-    file_handler = logging.FileHandler(log_file, encoding="utf-8")
+    file_handler = RotatingFileHandler(
+        log_file, mode="a", maxBytes=5 * 1024 * 1024, backupCount=5, encoding="utf-8"
+    )
     file_handler.setFormatter(formatter)
     logger.addHandler(file_handler)
 

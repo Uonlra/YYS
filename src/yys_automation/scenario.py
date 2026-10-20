@@ -23,6 +23,10 @@ class ScenarioStep:
     x: int | None
     y: int | None
     wait_after_seconds: float
+    max_attempts: int = 1
+    next_step: str | None = None
+    response_timeout_seconds: float = 3.0
+    recover_to: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -34,6 +38,8 @@ class Scenario:
     repeat_count: int | None = 1
     max_cycles: int = 800
     max_clicks: int | Literal["auto"] | None = None
+    recovery_scans: int = 0
+    recovery_interval_seconds: float = 1.0
 
     @property
     def cycle_limit(self) -> int:
@@ -43,9 +49,13 @@ class Scenario:
     def clicks_per_cycle(self) -> int:
         return sum(step.type in {"match_and_click", "click_point"} for step in self.steps)
 
+    @property
+    def click_attempts_per_cycle(self) -> int:
+        return sum(step.max_attempts for step in self.steps if step.type in {"match_and_click", "click_point"})
+
     def click_budget(self, config: AppConfig) -> tuple[int | None, str]:
         if self.max_clicks == "auto":
-            return self.clicks_per_cycle * self.cycle_limit, "scenario.auto"
+            return self.click_attempts_per_cycle * self.cycle_limit, "scenario.auto"
         if self.max_clicks is not None:
             return self.max_clicks, "scenario.max_clicks"
         return config.max_clicks, "config.max_clicks"
@@ -71,6 +81,12 @@ def load_scenario(path: Path) -> Scenario:
     repeat_count = None if repeat_value is None else _integer(repeat_value, "repeat_count")
     if repeat_count is not None and not 1 <= repeat_count <= max_cycles:
         raise ValueError("scenario repeat_count must be null or between 1 and max_cycles")
+    recovery_scans = _integer(raw.get("recovery_scans", 0), "recovery_scans")
+    if not 0 <= recovery_scans <= 2:
+        raise ValueError("recovery_scans must be between 0 and 2")
+    recovery_interval = _finite_float(raw.get("recovery_interval_seconds", 1), "recovery_interval_seconds")
+    if recovery_interval <= 0:
+        raise ValueError("recovery_interval_seconds must be positive")
     max_clicks = None
     if "max_clicks" in raw:
         value = raw["max_clicks"]
@@ -122,6 +138,22 @@ def load_scenario(path: Path) -> Scenario:
             raise ValueError(f"step {step_id}: invalid timeout or wait_after_seconds")
         if threshold is not None and not 0.0 < threshold <= 1.0:
             raise ValueError(f"step {step_id}: threshold must be between 0 and 1")
+        max_attempts = _integer(item.get("max_attempts", 1), f"step {step_id} max_attempts")
+        next_step = item.get("next_step")
+        response_timeout = _finite_float(item.get("response_timeout_seconds", 3), "response_timeout_seconds")
+        recover_to = item.get("recover_to", [])
+        if not 1 <= max_attempts <= 3:
+            raise ValueError(f"step {step_id}: max_attempts must be between 1 and 3")
+        if next_step is not None and (not isinstance(next_step, str) or not next_step):
+            raise ValueError(f"step {step_id}: next_step must be a non-empty step id")
+        if response_timeout <= 0:
+            raise ValueError(f"step {step_id}: response_timeout_seconds must be positive")
+        if not isinstance(recover_to, list) or any(not isinstance(value, str) for value in recover_to):
+            raise ValueError(f"step {step_id}: recover_to must be a list of step ids")
+        if max_attempts > 1 and (step_type != "match_and_click" or next_step is None):
+            raise ValueError(f"step {step_id}: retries require match_and_click with next_step")
+        if next_step is not None and step_type != "match_and_click":
+            raise ValueError(f"step {step_id}: next_step requires match_and_click")
 
         steps.append(
             ScenarioStep(
@@ -133,8 +165,25 @@ def load_scenario(path: Path) -> Scenario:
                 x=x,
                 y=y,
                 wait_after_seconds=wait_after,
+                max_attempts=max_attempts,
+                next_step=next_step,
+                response_timeout_seconds=response_timeout,
+                recover_to=tuple(recover_to),
             )
         )
+
+    indices = {step.id: index for index, step in enumerate(steps)}
+    for index, step in enumerate(steps):
+        if step.next_step is not None and indices.get(step.next_step) != index + 1:
+            raise ValueError(f"step {step.id}: next_step must reference the immediately following step")
+        for target_id in (*step.recover_to, *((step.next_step,) if step.next_step else ())):
+            target_index = indices.get(target_id)
+            if target_index is None or target_index <= index:
+                raise ValueError(f"step {step.id}: target {target_id!r} must reference a later step")
+            if steps[target_index].image is None:
+                raise ValueError(f"step {step.id}: target {target_id!r} must have an image")
+            if steps[target_index].type not in {"match_and_click", "wait_for_image"}:
+                raise ValueError(f"step {step.id}: target {target_id!r} must revalidate its image")
 
     return Scenario(
         name=name,
@@ -144,6 +193,8 @@ def load_scenario(path: Path) -> Scenario:
         repeat_count=repeat_count,
         max_cycles=max_cycles,
         max_clicks=max_clicks,
+        recovery_scans=recovery_scans,
+        recovery_interval_seconds=recovery_interval,
     )
 
 

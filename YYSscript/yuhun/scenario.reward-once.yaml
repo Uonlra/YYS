@@ -4,9 +4,15 @@ max_retries: 1
 retry_after_clicks: false
 repeat_count: 1
 max_cycles: 800
+recovery_scans: 2
+recovery_interval_seconds: 1.0
 
 steps:
   - id: start
+    max_attempts: 3
+    next_step: confirm
+    response_timeout_seconds: 3
+    recover_to: [confirm, reward]
     type: match_and_click
     image: ../../assets/targets/start.png
     threshold: 0.86
@@ -14,6 +20,10 @@ steps:
     wait_after_seconds: 1.0
 
   - id: confirm
+    max_attempts: 3
+    next_step: reward
+    response_timeout_seconds: 3
+    recover_to: [reward]
     type: match_and_click
     image: ../../assets/targets/confirm.png
     threshold: 0.86
@@ -21,6 +31,10 @@ steps:
     wait_after_seconds: 1.0
 
   - id: reward
+    max_attempts: 3
+    next_step: returned_to_start
+    response_timeout_seconds: 3
+    recover_to: [returned_to_start]
     type: match_and_click
     image: ../../assets/targets/reward.png
     threshold: 0.86

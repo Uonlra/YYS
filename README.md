@@ -103,11 +103,11 @@ python run.py --config config.yaml --scenario scenario.example.yaml
 python run.py --config config.yaml --gui scenario.example.yaml
 ```
 
-场景配置中的 `max_retries` 只会重试尚未发生点击的失败尝试。只有明确设置 `retry_after_clicks: true`，才会允许点击后的场景从第一步重试；这可能重复已经执行成功的操作，应只用于幂等场景。
+未配置状态确认的旧场景可用 `max_retries` 控制整轮尝试；只有明确设置 `retry_after_clicks: true` 才允许点击后从第一步重试。配置了 `next_step` 或恢复路径的场景采用下述步骤级有限尝试，失败后不整轮重放，避免绕过步骤尝试上限。
 
 启动场景前会预检 YAML 结构、步骤 ID、图片可解码性，以及坐标点击是否位于参考窗口和点击白名单内。配置中布尔值必须使用 YAML 的 `true` / `false`，时间和阈值必须是有限数值。
 
-普通识别循环使用 `config.yaml` 的 `max_clicks`。场景可在 YAML 中独立配置 `max_clicks`：`auto` 按点击步骤数和轮数计算预算；整数设置该场景的明确上限；省略时使用全局配置。dry-run 中也会按计划点击计数。`startup_delay_seconds` 在普通识别循环开始识别前等待，也支持紧急停止。`max_retries` 表示每轮场景最多尝试次数，不是额外重试次数。
+普通识别循环使用 `config.yaml` 的 `max_clicks`。场景可在 YAML 中独立配置 `max_clicks`：`auto` 按各点击步骤的最大尝试次数之和乘以轮数计算预算；整数设置该场景的明确上限；省略时使用全局配置。dry-run 中也会按计划点击计数。`startup_delay_seconds` 在普通识别循环开始识别前等待，也支持紧急停止。`max_retries` 表示每轮场景最多尝试次数，不是额外重试次数。
 
 ## 单次领奖流程
 
@@ -118,9 +118,9 @@ python run.py --config config.yaml --gui scenario.example.yaml
 .\.venv\Scripts\python.exe -B run.py --config config.yaml --scenario YYSscript/yuhun/scenario.reward-once.yaml
 ```
 
-运行前保持目标窗口打开，处于 start 界面；配置使用 `capture_mode: window`、`dry_run: false`。场景自动设置三次点击预算，不需要为此修改全局 `max_clicks`。confirm 最多等待 180 秒，reward 和返回 start 各等待 60 秒，可按实际流程调整。任一步超时或失败都会停止，本流程不自动重试。
+运行前保持目标窗口打开，处于 start 界面；配置使用 `capture_mode: window`、`dry_run: false`。正常执行点击三次，每个动作最多尝试三次，因此自动预算预留九次，不需要修改全局 `max_clicks`。点击 start 后最多等待 confirm 180 秒，confirm 后等待 reward 60 秒，reward 后等待 start 60 秒；可按实际流程调整。用尽步骤尝试和恢复扫描仍无法确认状态才停止，不从头重放。
 
-场景点击使用窗口消息，可能与已验证的普通鼠标点击效果不同；首次请观察按钮是否响应。看到 `Scenario completed: reward_once` 表示已发出三次点击并重新识别到 start，不代表已校验实际奖励数量。dry-run 不会推动界面变化，因此从 start 界面运行通常会在等待 confirm 时超时。
+场景点击使用窗口消息，可能与已验证的普通鼠标点击效果不同；首次请观察按钮是否响应。看到 `Scenario completed: reward_once` 表示流程确认回到 start；存在重试或状态恢复时，实际点击数可能不同，不代表校验了奖励数量。dry-run 不会推动界面变化，可能反复模拟同一按钮，最终耗尽尝试退出。
 
 ## 御魂重复流程
 
@@ -137,7 +137,7 @@ python run.py --config config.yaml --gui scenario.example.yaml
 .\.venv\Scripts\python.exe -B run.py --config config.yaml --scenario YYSscript/yuhun/scenario.reward-repeat.yaml
 ```
 
-重复版每轮确认返回 start 后才进入下一轮。按 Esc 或 Ctrl+Shift+Q 停止；任一步失败立即退出，不忽略错误继续刷。日志记录当前轮数、完成轮数和累计点击数。
+重复版每轮确认返回 start 后才进入下一轮。按 Esc 或 Ctrl+Shift+Q 停止；允许的步骤尝试和恢复仍失败后退出。越界、预算不足、状态冲突或鼠标 failsafe 立即停止，不进入恢复。日志记录当前轮数、完成轮数和累计点击数。
 
 ```yaml
 repeat_count: null
@@ -146,14 +146,14 @@ max_cycles: 800
 
 `repeat_count: null` 表示重复至 `max_cycles` 安全上限或提前停止。未来定次运行只需将 `repeat_count` 改为 1 到 `max_cycles` 之间的整数，例如 `repeat_count: 10`。未写 `repeat_count` 的旧场景仍只执行一次。`max_retries` 仍是每轮的最大尝试次数，与轮数无关。
 
-重复流程设置 `max_clicks: auto`，预算为每轮点击步骤数乘以计划轮数，不需要更改全局配置。本流程每轮点击三次，800 轮的自动预算为 2400。预算在所有轮次之间累计，不会每轮重置；若剩余额度不足以完成下一整轮，程序会在新一轮开始前停止。首次建议将 `repeat_count` 临时设为 2 验证两轮，再恢复 `null`。dry-run 界面不会推进状态，实际重复流程要观察游戏对每次窗口消息点击的响应。
+重复流程设置 `max_clicks: auto`，按每轮最大九次点击尝试计算，800 轮预留 7200 次；正常每步一次成功仍只点击 2400 次。预算跨轮累计，开始新一轮前必须足够覆盖该轮全部允许的点击尝试。首次建议将 `repeat_count` 临时设为 2 验证两轮，再恢复 `null`。
 
 ## 场景点击预算
 
 | 场景字段 | 有效预算 | 与全局配置的关系 |
 | --- | --- | --- |
 | 不写 `max_clicks` | `config.yaml` 中的值 | 沿用已有场景行为，全局 `null` 表示不限点击数 |
-| `max_clicks: auto` | 每轮点击步骤数乘以计划轮数 | 覆盖全局默认值 |
+| `max_clicks: auto` | 每轮点击步骤的 `max_attempts` 之和乘以计划轮数 | 覆盖全局默认值 |
 | `max_clicks: 500` | 本场景最多 500 次点击 | 覆盖全局默认值 |
 | `max_clicks: 0` | 禁止点击，仍可执行等待与观察步骤 | 覆盖全局默认值 |
 
@@ -167,7 +167,46 @@ max_cycles: 800
 max_clicks: auto
 ```
 
-自动预算为 500；`wait` 和 `wait_for_image` 不计入点击数。点击发送失败可能已产生副作用，因此仍会消耗额度。重试共享原预算，不额外增加额度；允许点击后重试的任务如需额外额度，请显式设置整数上限。自动计算适用于当前每个点击步骤最多发送一次的顺序流程；后续引入分支或步骤内多次点击时，需要同时扩展预算计算和相应测试。
+若每步默认只尝试一次，自动预算为 500；若五个动作都设为最多三次，则预算为 1500。`wait` 和 `wait_for_image` 不计入点击数。点击发送失败可能已产生副作用，仍消耗额度；恢复扫描不点击，不消耗额度。旧式整轮重试不额外增加预算。后续引入分支或其他步骤内多次点击时，应同步扩展预算计算和测试。
+
+## 点击确认与恢复
+
+这些能力由每个场景独立声明，未配置的旧步骤仍只点击一次。御魂单次版和重复版均已启用：
+
+```yaml
+recovery_scans: 2
+recovery_interval_seconds: 1.0
+steps:
+  - id: start
+    type: match_and_click
+    image: ../../assets/targets/start.png
+    max_attempts: 3
+    next_step: confirm
+    response_timeout_seconds: 3
+    recover_to: [confirm, reward]
+    timeout_seconds: 30
+```
+
+此片段需要接上 confirm、reward 等步骤；`next_step` 必须是紧接着的下一步骤 ID。`recover_to` 只能引用后续的模板点击或图片等待步骤，不能回到前序步骤、不能恢复到固定坐标点击。步骤 ID 改名、删除或调序后需要重新校验。
+
+执行规则：
+
+1. 等待当前按钮，或确认预期下一状态已经出现；匹配冲突立即停止。
+2. 当前按钮匹配后点击，最多 `max_attempts` 次（包含首次，范围 1 到 3）。
+3. 点击后持续观察，若按钮一直存在，至少等待响应时间、执行后等待和全局冷却限制，再重新截图尝试。
+4. 一旦观察到按钮消失，只等待下一状态，不再补点；即使原按钮重新出现，也不会自动当作新一轮。点击后的长等待使用下一步骤的 `timeout_seconds`，至少覆盖响应时间；每次发送尝试都重新获得这一段观察时间。
+5. 下一状态出现才算当前动作完成。达到次数或等待上限后保存失败现场，再最多扫描两轮 `recover_to`；扫描自身不点击。
+6. 恢复扫描只有一个候选匹配且当前状态不同时匹配，才从该步骤继续，并在实际点击前重新截图验证。恢复入口动作最多尝试两次，之后动作遵循各自配置。只允许向后恢复，因此不会无限跳转。
+
+御魂 start 允许恢复到 confirm 或 reward；confirm 只允许恢复到 reward，看到 start 不会擅自开启下一轮；reward 允许恢复到返回 start 的观察步骤。越界、预算不足、停止、状态冲突、意外错误不执行恢复。点击发送异常可能已经送达，先观察再决定是否补点；鼠标 `FailSafeException` 则直接停止。使用新机制的场景失败后不再整轮重试。
+
+GUI 可编辑步骤最大尝试数、下一步骤、响应等待和恢复候选，保存时保留场景级恢复扫描参数。“测试当前步骤”刻意降为一次单步操作，不执行下一状态确认或恢复；验证完整恢复逻辑请运行整个场景。
+
+## 日志与现场
+
+`logs/automation.log` 以追加方式写入，达到 5 MiB 自动轮转为 `.1` 到 `.5`，最多五份归档，文件总量通常约 30 MiB；超过保留数量的旧归档会自动淘汰。原有日志不清空，过大时会在下一条记录触发轮转；单条超长记录可能略超限。重复初始化日志会关闭旧处理器，避免句柄泄漏。不要让多个进程同时写入并轮转同一个日志文件；同时运行不同实例请使用不同 `log_file`。
+
+步骤失败会尝试将归一化后的窗口画面保存到日志文件旁的 `failures/`，仅保留最新 20 张 `failure_*.png`。截图数量受限，文件大小取决于分辨率。日志记录失败原因、步骤、完成轮数、点击数、坐标变换和匹配诊断。无法获取新画面时回退到最近一次截图，并标记 `source=last_capture`；完全没有画面时只记录原因。磁盘写入失败不会阻止任务退出，用户按停止不会生成失败截图。
 
 ## 多流程约定
 
