@@ -41,9 +41,13 @@ class WorkflowRunner:
         self.clicker = clicker
         self.stop_controller = stop_controller
         self.logger = logger
+        self.clicks_done = 0
+        self.last_click_at = 0.0
+        self._attempt_clicked = False
 
     def run(self) -> bool:
         for attempt in range(1, self.scenario.max_retries + 1):
+            self._attempt_clicked = False
             self.logger.info(
                 "Scenario attempt %d/%d: %s",
                 attempt,
@@ -54,6 +58,9 @@ class WorkflowRunner:
                 self.logger.info("Scenario completed: %s", self.scenario.name)
                 return True
             if self._should_stop():
+                break
+            if self._attempt_clicked and not self.scenario.retry_after_clicks:
+                self.logger.error("Scenario retry stopped after a click: %s", self.scenario.name)
                 break
             self.logger.warning("Scenario attempt failed: %d/%d", attempt, self.scenario.max_retries)
         self.logger.error("Scenario failed: %s", self.scenario.name)
@@ -87,6 +94,15 @@ class WorkflowRunner:
 
         deadline = time.monotonic() + step.timeout_seconds
         while time.monotonic() < deadline and not self._should_stop():
+            if self.config.max_clicks is not None and self.clicks_done >= self.config.max_clicks:
+                self.logger.warning("Step %s rejected: max clicks reached", step.id)
+                return False
+            if self.clicks_done:
+                remaining = self.config.min_click_interval_seconds - (time.monotonic() - self.last_click_at)
+                if remaining > 0:
+                    if not self._sleep_with_stop(min(remaining, max(0, deadline - time.monotonic()))):
+                        return False
+                    continue
             try:
                 frame = self.source.grab()
             except Exception as exc:
@@ -97,7 +113,7 @@ class WorkflowRunner:
             if step.type == "click_point":
                 assert step.x is not None and step.y is not None
                 point_box = frame.to_screen_region(Region(step.x, step.y, 1, 1))
-                return self._perform_click(step, point_box.left, point_box.top)
+                return self._perform_click_if_allowed(step, frame, point_box.left, point_box.top)
 
             assert detector is not None
             match = detector.find_best(frame.image)
@@ -120,10 +136,41 @@ class WorkflowRunner:
                 box.width,
                 box.height,
             )
-            return self._perform_click(step, point[0], point[1])
+            return self._perform_click_if_allowed(step, frame, point[0], point[1])
         return False
 
+    def _perform_click_if_allowed(self, step: ScenarioStep, frame: Frame, x: int, y: int) -> bool:
+        if self._should_stop():
+            return False
+        frame_region = frame.to_screen_region(
+            Region(0, 0, frame.image.shape[1], frame.image.shape[0])
+        )
+        if not frame_region.contains_point(x, y):
+            self.logger.warning("Step %s rejected outside captured client area: x=%d y=%d", step.id, x, y)
+            return False
+        allowed_region = self._allowed_screen_region(frame)
+        if not allowed_region.contains_point(x, y):
+            self.logger.warning(
+                "Step %s click rejected outside allowed region: x=%d y=%d "
+                "allowed=(%d,%d,%d,%d)",
+                step.id,
+                x,
+                y,
+                allowed_region.left,
+                allowed_region.top,
+                allowed_region.width,
+                allowed_region.height,
+            )
+            return False
+        if self.config.max_clicks is not None and self.clicks_done >= self.config.max_clicks:
+            self.logger.warning("Step %s click rejected: max clicks reached", step.id)
+            return False
+        return self._perform_click(step, x, y)
+
     def _perform_click(self, step: ScenarioStep, x: int, y: int) -> bool:
+        self._attempt_clicked = True
+        self.clicks_done += 1
+        self.last_click_at = time.monotonic()
         if self.config.dry_run:
             self.logger.info("Dry run: would click step=%s x=%d y=%d", step.id, x, y)
         else:
@@ -132,15 +179,21 @@ class WorkflowRunner:
             except Exception as exc:
                 self.logger.warning("Step %s click failed: %s", step.id, exc)
                 return False
+        self.last_click_at = time.monotonic()
         return self._sleep_with_stop(step.wait_after_seconds)
+
+    def _allowed_screen_region(self, frame: Frame) -> Region:
+        if self.config.capture_mode == "window":
+            return frame.to_screen_region(self.config.allowed_region)
+        return self.config.allowed_region
 
     def _sleep_with_stop(self, seconds: float) -> bool:
         deadline = time.monotonic() + seconds
         while time.monotonic() < deadline:
             if self._should_stop():
                 return False
-            time.sleep(min(0.05, deadline - time.monotonic()))
-        return True
+            time.sleep(max(0, min(0.05, deadline - time.monotonic())))
+        return not self._should_stop()
 
     def _should_stop(self) -> bool:
         return bool(getattr(self.stop_controller, "should_stop", False))

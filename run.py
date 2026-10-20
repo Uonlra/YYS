@@ -43,13 +43,20 @@ def parse_args() -> argparse.Namespace:
         metavar="PATH",
         help="Run a scenario YAML through the workflow state machine.",
     )
+    parser.add_argument(
+        "--gui",
+        nargs="?",
+        const="scenario.yaml",
+        metavar="PATH",
+        help="Open the visual scenario editor, optionally for PATH.",
+    )
     return parser.parse_args()
 
 
 def sleep_with_stop(seconds: float, stop_controller: StopController) -> None:
     deadline = time.monotonic() + seconds
     while time.monotonic() < deadline and not stop_controller.should_stop:
-        time.sleep(min(0.05, deadline - time.monotonic()))
+        time.sleep(max(0, min(0.05, deadline - time.monotonic())))
 
 
 def run(config: AppConfig) -> int:
@@ -164,9 +171,7 @@ def run(config: AppConfig) -> int:
             x, y = clicker.pick_point_inside(absolute_box, random.Random())
             frame_region = config.allowed_region
             if config.capture_mode == "window":
-                frame_region = frame.to_screen_region(
-                    Region(left=0, top=0, width=frame.image.shape[1], height=frame.image.shape[0])
-                )
+                frame_region = frame.to_screen_region(config.allowed_region)
             if not frame_region.contains_point(x, y):
                 logger.warning("Click skipped: point outside allowed region x=%d y=%d", x, y)
                 sleep_with_stop(config.scan_interval_seconds, stop_controller)
@@ -199,6 +204,11 @@ def main() -> int:
         return 2
 
     config = load_config(config_path)
+    if args.gui is not None:
+        from src.yys_automation.config_gui import launch_gui
+
+        launch_gui(Path(args.gui), config_path)
+        return 0
     if args.validate_scenario:
         from src.yys_automation.scenario import load_scenario, validate_scenario
 
@@ -219,6 +229,9 @@ def main() -> int:
         from src.yys_automation.workflow import WorkflowRunner
         from src.yys_automation.window_clicker import WindowMessageClicker
 
+        if config.capture_mode != "window":
+            print("Scenario mode requires capture_mode: window")
+            return 2
         logger = setup_logging(config.log_file)
         stop_controller = StopController(logger)
         stop_controller.start()

@@ -17,7 +17,7 @@ recognition:
   template_scale_max: 1.35
   template_scale_step: 0.05
 
-# 只截取和点击这个白名单区域，单位是屏幕像素。
+# 点击白名单区域：window 模式使用窗口参考坐标，desktop 模式使用屏幕绝对坐标。
 allowed_region:
   left: 0
   top: 0

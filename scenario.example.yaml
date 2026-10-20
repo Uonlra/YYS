@@ -1,5 +1,7 @@
 name: onmyoji_reward_flow
 max_retries: 3
+# 默认情况下，点击后失败不会从第一步重复执行，避免重复副作用操作。
+retry_after_clicks: false
 
 steps:
   - id: start

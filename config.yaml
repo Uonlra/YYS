@@ -47,7 +47,7 @@ click_jitter_pixels:
 startup_delay_seconds: 3.0
 
 # 只识别不点击，用于调试。
-dry_run: false
+dry_run: True
 
 # 日志文件。
 log_file: "logs/automation.log"

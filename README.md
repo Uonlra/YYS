@@ -13,6 +13,7 @@
 - 鼠标移动时间、点击点偏移可配置
 - `Esc` 或 `Ctrl+Shift+Q` 紧急停止
 - 日志记录识别结果、点击坐标、点击时间
+- 场景默认在发生点击后不自动从头重试，避免重复执行有副作用的操作
 
 ## 项目结构
 
@@ -32,11 +33,22 @@ YYS/
       __init__.py
       clicker.py
       config.py
+      config_gui.py
       detector.py
       logging_setup.py
+      scenario.py
       safety.py
       screen.py
+      window.py
+      window_capture.py
+      window_clicker.py
+      window_screen.py
+      workflow.py
+  tests/
+    test_workflow.py
 ```
+
+窗口模式下，`allowed_region` 使用窗口参考坐标；桌面模式下使用屏幕绝对坐标。场景模式要求 `capture_mode: window`。场景中的模板点击和坐标点击都会经过该白名单检查，并同时受到 `max_clicks` 和 `min_click_interval_seconds` 限制。
 
 ## 安装
 
@@ -75,12 +87,30 @@ allowed_region:
   height: 1080
 ```
 
-`allowed_region` 是点击白名单区域。程序只截取和点击这个区域内的内容。
+`allowed_region` 是点击白名单区域。桌面模式只截取该区域；窗口模式截取整个客户区，但只允许点击映射后的白名单区域。
 
 ## 运行
 
 ```powershell
 python run.py --config config.yaml
+```
+
+场景模式：
+
+```powershell
+python run.py --config config.yaml --validate-scenario scenario.example.yaml
+python run.py --config config.yaml --scenario scenario.example.yaml
+python run.py --config config.yaml --gui scenario.example.yaml
+```
+
+场景配置中的 `max_retries` 只会重试尚未发生点击的失败尝试。只有明确设置 `retry_after_clicks: true`，才会允许点击后的场景从第一步重试；这可能重复已经执行成功的操作，应只用于幂等场景。
+
+## 测试
+
+测试不需要启动目标窗口，使用模拟画面验证场景点击的坐标映射、白名单、点击上限和重试策略：
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
 运行后：
@@ -103,6 +133,6 @@ python run.py --config config.yaml
 
 - 增加 OCR 文字识别
 - 增加多目标模板
-- 增加 GUI 配置面板
-- 增加窗口句柄绑定，只识别指定窗口
+- 完善已有场景 GUI 的配置体验
+- 支持固定窗口句柄，避免同名窗口切换
 - 增加 dry-run 模式截图标注预览

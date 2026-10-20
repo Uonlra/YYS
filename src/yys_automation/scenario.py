@@ -26,6 +26,7 @@ class ScenarioStep:
 class Scenario:
     name: str
     max_retries: int
+    retry_after_clicks: bool
     steps: tuple[ScenarioStep, ...]
 
 
@@ -37,6 +38,9 @@ def load_scenario(path: Path) -> Scenario:
     max_retries = int(raw.get("max_retries", 3))
     if max_retries < 1:
         raise ValueError("scenario max_retries must be >= 1")
+    retry_after_clicks = raw.get("retry_after_clicks", False)
+    if not isinstance(retry_after_clicks, bool):
+        raise ValueError("scenario retry_after_clicks must be a boolean")
 
     raw_steps = raw.get("steps")
     if not isinstance(raw_steps, list) or not raw_steps:
@@ -83,7 +87,12 @@ def load_scenario(path: Path) -> Scenario:
             )
         )
 
-    return Scenario(name=name, max_retries=max_retries, steps=tuple(steps))
+    return Scenario(
+        name=name,
+        max_retries=max_retries,
+        retry_after_clicks=retry_after_clicks,
+        steps=tuple(steps),
+    )
 
 
 def validate_scenario(path: Path) -> list[str]:

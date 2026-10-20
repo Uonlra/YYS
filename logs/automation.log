@@ -582,3 +582,31 @@
 2026-10-19 20:58:08 ERROR Step failed: start
 2026-10-19 20:58:08 WARNING Scenario attempt failed: 1/1
 2026-10-19 20:58:08 ERROR Scenario failed: start_only_smoke_test
+2026-10-19 21:05:33 INFO Scenario attempt 1/1: start_only_smoke_test
+2026-10-19 21:05:33 INFO Step started: start type=match_and_click
+2026-10-19 21:05:33 WARNING Step start capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 21:05:33 WARNING Step start capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 21:05:33 WARNING Step start capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 21:05:33 WARNING Step start capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 21:05:34 WARNING Step start capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 21:05:34 WARNING Step start capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 21:05:34 WARNING Step start capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 21:05:34 WARNING Step start capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 21:05:35 WARNING Step start capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 21:05:35 WARNING Step start capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 21:05:35 WARNING Step start capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 21:05:35 WARNING Step start capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 21:05:36 WARNING Step start capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 21:05:36 WARNING Step start capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 21:05:36 WARNING Step start capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 21:05:36 WARNING Step start capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 21:05:37 WARNING Step start capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 21:05:37 WARNING Step start capture failed: Window not found: 阴阳师-MuMu模拟器专版
+2026-10-19 21:06:03 ERROR Step failed: start
+2026-10-19 21:06:03 WARNING Scenario attempt failed: 1/1
+2026-10-19 21:06:03 ERROR Scenario failed: start_only_smoke_test
+2026-10-19 21:06:15 INFO Scenario attempt 1/1: start_only_smoke_test
+2026-10-19 21:06:15 INFO Step started: start type=match_and_click
+2026-10-19 21:06:46 ERROR Step failed: start
+2026-10-19 21:06:46 WARNING Scenario attempt failed: 1/1
+2026-10-19 21:06:46 ERROR Scenario failed: start_only_smoke_test
