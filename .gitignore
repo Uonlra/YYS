@@ -1,7 +1,26 @@
+# Local environments and Python bytecode
 .venv/
 __pycache__/
-**/__pycache__/
 *.py[cod]
+
+# IDE files
+.idea/
+*.iml
+
+# Test and analysis caches
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# Packaging output
+/build/
+/dist/
+*.egg-info/
+
+# Runtime logs, screenshots, and temporary scenarios
 logs/*
 !logs/.gitkeep
 yys_step_*.yaml
