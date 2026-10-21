@@ -122,7 +122,13 @@ python run.py --config config.yaml --gui scenario.example.yaml
 
 `scenario.match-any.yaml` 设置 `execution_mode: match_any`，将 start、confirm、reward 作为无顺序目标列表。每次截图匹配所有目标，达到各自阈值后点击；多图同时命中时选匹配分数最高的一张，分数相同按配置顺序选择。每帧最多点击一次，随后等待冷却并重新截图。图片一直存在时会在冷却后再次点击，不受三次动作尝试、前后步骤或领奖阶段约束。
 
-此模式使用 PyAutoGUI 平滑移动系统鼠标并点击，不使用顺序场景的 `PostMessageW`。日志会记录鼠标到达坐标及物理点击已发送；这只能确认系统输入已发出，不代表游戏控件响应。模板应裁取真正的交互按钮，而不是标题、图标或奖励装饰图。比如当前 `assets/targets/confirm.png` 是“阴阳师”标题装饰图，不是确认按钮，需替换成实际确认控件截图，否则点击可能没有可见效果。这是实际鼠标输入，会移动光标；运行前确认游戏窗口位于正确桌面位置且允许成为前台窗口，必要时先聚焦游戏。按住 Esc 可紧急停止，移动鼠标到屏幕左上角也会触发 PyAutoGUI failsafe。
+点击后端由 `input_backend` 选择。`physical_mouse` 使用 PyAutoGUI 移动系统鼠标并点击，窗口必须位于桌面最前方，否则物理坐标可能点到遮挡窗口；`window_message` 使用 PostMessage 向目标窗口发消息，不移动光标，可尝试后台窗口，但应用可能忽略后台输入。MuMu/游戏是否接受后台消息取决于其输入实现，不能保证所有遮挡或最小化状态下都工作。日志会说明所选后端；窗口消息失败时会分别记录按下和抬起消息的发送状态。
+
+```yaml
+input_backend: window_message
+```
+
+切换后端建议先用小 `max_clicks` 测试。使用 `physical_mouse` 时确认窗口位于最前方并聚焦；使用 `window_message` 时可尝试遮挡窗口并确认游戏响应。物理鼠标会移动光标；按 Esc/Ctrl+Shift+Q 可紧急停止，鼠标移到屏幕左上角也会触发 PyAutoGUI failsafe。模板必须对应实际交互按钮，而不是标题或装饰图。
 
 没有目标命中就继续等待，期间可按 Esc 或 Ctrl+Shift+Q 停止。窗口捕获、图像处理或点击异常，以及点击越界，会停止并记录诊断。点击仍受白名单、`min_click_interval_seconds`、各目标的 `wait_after_seconds`、dry-run 和总点击上限约束。该模式不判断奖励是否领取成功，也不统计完整轮数；重新出现 start 时会按普通目标点击并继续任务。
 

@@ -270,7 +270,9 @@ def main() -> int:
         stop_controller = StopController(logger)
         source = WindowScreenCapture(config.window)
         clicker = (
-            HumanLikeClicker(config, logger)
+            WindowMessageClicker(config, logger)
+            if scenario.execution_mode == "match_any" and scenario.input_backend == "window_message"
+            else HumanLikeClicker(config, logger)
             if scenario.execution_mode == "match_any"
             else WindowMessageClicker(config, logger)
         )
@@ -278,7 +280,7 @@ def main() -> int:
             stop_controller.start()
             logger.info(
                 "Click backend: %s",
-                "pyautogui physical mouse" if scenario.execution_mode == "match_any" else "window messages",
+                scenario.input_backend if scenario.execution_mode == "match_any" else "window_message",
             )
             return 0 if WorkflowRunner(
                 scenario,

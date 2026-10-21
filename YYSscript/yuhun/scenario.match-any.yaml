@@ -1,5 +1,6 @@
 name: yuhun_match_any
 execution_mode: match_any
+input_backend: window_message
 max_clicks: 2400
 
 steps:

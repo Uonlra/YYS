@@ -121,29 +121,31 @@ class MatchAnyTests(unittest.TestCase):
     def test_shipped_config_is_unordered_and_bounded(self) -> None:
         scenario = load_scenario(Path(__file__).resolve().parents[1] / "YYSscript/yuhun/scenario.match-any.yaml")
         self.assertEqual(scenario.execution_mode, "match_any")
+        self.assertEqual(scenario.input_backend, "window_message")
         self.assertEqual(scenario.max_clicks, 2400)
         self.assertEqual([step.image.stem for step in scenario.steps], ["start", "confirm", "reward"])
 
-    def test_match_any_cli_uses_physical_mouse_backend(self) -> None:
-        scenario = Scenario("any", 1, False, (), execution_mode="match_any")
-        with patch("sys.argv", ["run.py", "--config", "config.yaml", "--scenario", "any.yaml"]), \
-             patch("src.yys_automation.scenario.validate_scenario", return_value=[]), \
-             patch("src.yys_automation.scenario.load_scenario", return_value=scenario), \
-             patch("src.yys_automation.safety.StopController"), \
-             patch("src.yys_automation.window_screen.WindowScreenCapture"), \
-             patch("src.yys_automation.clicker.HumanLikeClicker") as physical_clicker, \
-             patch("src.yys_automation.window_clicker.WindowMessageClicker") as message_clicker, \
-             patch("src.yys_automation.workflow.WorkflowRunner") as runner, \
-             patch("run.setup_logging"):
-            runner.return_value.run.return_value = True
-            with patch("run.load_config") as load_config:
-                from dataclasses import replace
-                from test_workflow import make_config
+    def test_match_any_cli_selects_configured_input_backend(self) -> None:
+        from dataclasses import replace
+        from test_workflow import make_config
 
-                load_config.return_value = replace(make_config(), capture_mode="window")
-                self.assertEqual(main(), 0)
-            physical_clicker.assert_called_once()
-            message_clicker.assert_not_called()
+        for backend, physical, message in (("physical_mouse", True, False), ("window_message", False, True)):
+            with self.subTest(backend=backend):
+                scenario = Scenario("any", 1, False, (), execution_mode="match_any", input_backend=backend)
+                with patch("sys.argv", ["run.py", "--config", "config.yaml", "--scenario", "any.yaml"]), \
+                     patch("src.yys_automation.scenario.validate_scenario", return_value=[]), \
+                     patch("src.yys_automation.scenario.load_scenario", return_value=scenario), \
+                     patch("src.yys_automation.safety.StopController"), \
+                     patch("src.yys_automation.window_screen.WindowScreenCapture"), \
+                     patch("src.yys_automation.clicker.HumanLikeClicker") as physical_clicker, \
+                     patch("src.yys_automation.window_clicker.WindowMessageClicker") as message_clicker, \
+                     patch("src.yys_automation.workflow.WorkflowRunner") as runner, \
+                     patch("run.setup_logging"), patch("run.load_config") as load_config:
+                    runner.return_value.run.return_value = True
+                    load_config.return_value = replace(make_config(), capture_mode="window")
+                    self.assertEqual(main(), 0)
+                self.assertEqual(physical_clicker.call_count == 1, physical)
+                self.assertEqual(message_clicker.call_count == 1, message)
 
 
 if __name__ == "__main__":

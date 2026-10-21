@@ -244,7 +244,7 @@ class ValidationTests(unittest.TestCase):
         path = self.root / "match.yaml"
         cases = ({"max_clicks": "auto"}, {"repeat_count": None}, {"max_retries": 3},
                  {"recovery_scans": 2}, {"stable_frames": 3}, {"execution_mode": []},
-                 {"execution_mode": "unknown"})
+                 {"execution_mode": "unknown"}, {"input_backend": "unknown"})
         for values in cases:
             with self.subTest(values=values):
                 path.write_text(yaml.safe_dump({"execution_mode": "match_any", **values,
@@ -258,7 +258,7 @@ class ValidationTests(unittest.TestCase):
         path = self.root / "match.yaml"
         for method in ("_save", "_save_silently"):
             with self.subTest(method=method):
-                path.write_text(yaml.safe_dump({"execution_mode": "match_any", "max_clicks": 12,
+                path.write_text(yaml.safe_dump({"execution_mode": "match_any", "input_backend": "window_message", "max_clicks": 12,
                     "steps": [{"id": "target", "type": "match_and_click", "image": "target.png"}],
                 }), encoding="utf-8")
                 original = load_scenario(path)
