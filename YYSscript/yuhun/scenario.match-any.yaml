@@ -1,0 +1,23 @@
+name: yuhun_match_any
+execution_mode: match_any
+input_backend: window_message
+max_clicks: 2400
+
+steps:
+  - id: start
+    type: match_and_click
+    image: ../../assets/targets/start.png
+    threshold: 0.86
+    wait_after_seconds: 1.0
+
+  - id: confirm
+    type: match_and_click
+    image: ../../assets/targets/confirm.png
+    threshold: 0.86
+    wait_after_seconds: 1.0
+
+  - id: reward
+    type: match_and_click
+    image: ../../assets/targets/reward.png
+    threshold: 0.86
+    wait_after_seconds: 1.0

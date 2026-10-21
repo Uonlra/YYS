@@ -45,7 +45,14 @@ class WindowMessageClicker:
         time.sleep(0.05)
         up_ok = bool(user32.PostMessageW(hwnd, 0x0202, 0x0000, lparam))
         if not down_ok or not up_ok:
-            raise RuntimeError(f"PostMessage click failed at client=({client_x},{client_y})")
+            self.logger.error(
+                "Window message click delivery uncertain: down_sent=%s up_sent=%s client=(%d,%d) hwnd=%s",
+                down_ok, up_ok, client_x, client_y, window.handle,
+            )
+            raise RuntimeError(
+                f"PostMessage click failed: down_sent={down_ok} up_sent={up_ok} "
+                f"client=({client_x},{client_y}) hwnd={window.handle}"
+            )
         self.logger.info(
             "Window click client=(x=%d y=%d) screen=(x=%d y=%d)",
             client_x,

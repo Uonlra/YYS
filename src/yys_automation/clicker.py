@@ -34,4 +34,7 @@ class HumanLikeClicker:
         )
         self.logger.debug("Moving mouse to x=%d y=%d duration=%.3f", x, y, duration)
         pyautogui.moveTo(x, y, duration=duration)
+        position = pyautogui.position()
+        self.logger.info("Physical mouse positioned at x=%d y=%d", position.x, position.y)
         pyautogui.click()
+        self.logger.info("Physical mouse click sent at x=%d y=%d", x, y)

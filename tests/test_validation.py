@@ -240,6 +240,38 @@ class ValidationTests(unittest.TestCase):
                 path.write_text(yaml.safe_dump({"stable_frames": value, "steps": [{"id": "pause", "type": "wait"}]}), encoding="utf-8")
                 self.assertTrue(any("stable_frames" in error for error in validate_scenario(path)))
 
+    def test_match_any_rejects_flow_controls_and_invalid_modes(self) -> None:
+        path = self.root / "match.yaml"
+        cases = ({"max_clicks": "auto"}, {"repeat_count": None}, {"max_retries": 3},
+                 {"recovery_scans": 2}, {"stable_frames": 3}, {"execution_mode": []},
+                 {"execution_mode": "unknown"}, {"input_backend": "unknown"})
+        for values in cases:
+            with self.subTest(values=values):
+                path.write_text(yaml.safe_dump({"execution_mode": "match_any", **values,
+                    "steps": [{"id": "target", "type": "match_and_click", "image": "target.png"}],
+                }), encoding="utf-8")
+                self.assertTrue(validate_scenario(path))
+
+    def test_gui_roundtrip_preserves_match_any_mode(self) -> None:
+        from src.yys_automation.config_gui import ScenarioEditor
+
+        path = self.root / "match.yaml"
+        for method in ("_save", "_save_silently"):
+            with self.subTest(method=method):
+                path.write_text(yaml.safe_dump({"execution_mode": "match_any", "input_backend": "window_message", "max_clicks": 12,
+                    "steps": [{"id": "target", "type": "match_and_click", "image": "target.png"}],
+                }), encoding="utf-8")
+                original = load_scenario(path)
+                editor = ScenarioEditor.__new__(ScenarioEditor)
+                editor.scenario = original
+                editor.steps = list(original.steps)
+                editor.path_var = Mock()
+                editor.path_var.get.return_value = str(path)
+                with patch("src.yys_automation.config_gui.messagebox") as messages:
+                    getattr(editor, method)()
+                    messages.showerror.assert_not_called()
+                self.assertEqual(load_scenario(path), original)
+
     def test_requires_action_must_reference_earlier_click_and_only_guard_observer(self) -> None:
         path = self.root / "phase.yaml"
         for target, step_type in (("missing", "wait_for_image"), ("end", "wait_for_image"),
