@@ -42,6 +42,7 @@ class Scenario:
     recovery_scans: int = 0
     recovery_interval_seconds: float = 1.0
     stable_frames: int = 1
+    execution_mode: Literal["sequential", "match_any"] = "sequential"
 
     @property
     def cycle_limit(self) -> int:
@@ -70,7 +71,10 @@ def load_scenario(path: Path) -> Scenario:
         raise ValueError("scenario root must be a mapping")
 
     name = str(raw.get("name", path.stem))
-    max_retries = _integer(raw.get("max_retries", 3), "max_retries")
+    execution_mode = raw.get("execution_mode", "sequential")
+    if not isinstance(execution_mode, str) or execution_mode not in {"sequential", "match_any"}:
+        raise ValueError("execution_mode must be sequential or match_any")
+    max_retries = _integer(raw.get("max_retries", 1 if execution_mode == "match_any" else 3), "max_retries")
     if max_retries < 1:
         raise ValueError("scenario max_retries must be >= 1")
     retry_after_clicks = raw.get("retry_after_clicks", False)
@@ -184,6 +188,14 @@ def load_scenario(path: Path) -> Scenario:
         )
 
     indices = {step.id: index for index, step in enumerate(steps)}
+    if execution_mode == "match_any":
+        if max_clicks == "auto":
+            raise ValueError("match_any has no cycles; use integer max_clicks or omit for config default")
+        if repeat_count != 1 or recovery_scans or max_retries != 1 or retry_after_clicks or stable_frames != 1:
+            raise ValueError("match_any does not use repeat_count, recovery, retries or multi-frame confirmation")
+        for step in steps:
+            if step.type != "match_and_click" or step.next_step or step.recover_to or step.requires_action or step.max_attempts != 1:
+                raise ValueError(f"step {step.id}: match_any requires plain match_and_click targets without flow rules")
     for index, step in enumerate(steps):
         if step.requires_action is not None:
             action_index = indices.get(step.requires_action)
@@ -211,6 +223,7 @@ def load_scenario(path: Path) -> Scenario:
         recovery_scans=recovery_scans,
         recovery_interval_seconds=recovery_interval,
         stable_frames=stable_frames,
+        execution_mode=execution_mode,
     )
 
 

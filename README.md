@@ -111,6 +111,39 @@ python run.py --config config.yaml --gui scenario.example.yaml
 
 ## 单次领奖流程
 
+如果只需要“看见配置图片就点击”，使用下面的无顺序模式；本节及后面的状态确认逻辑仅用于原顺序流程。
+
+## 无顺序匹配点击
+
+```powershell
+.\.venv\Scripts\python.exe -B run.py --config config.yaml --validate-scenario YYSscript/yuhun/scenario.match-any.yaml
+.\.venv\Scripts\python.exe -B run.py --config config.yaml --scenario YYSscript/yuhun/scenario.match-any.yaml
+```
+
+`scenario.match-any.yaml` 设置 `execution_mode: match_any`，将 start、confirm、reward 作为无顺序目标列表。每次截图匹配所有目标，达到各自阈值后点击；多图同时命中时选匹配分数最高的一张，分数相同按配置顺序选择。每帧最多点击一次，随后等待冷却并重新截图。图片一直存在时会在冷却后再次点击，不受三次动作尝试、前后步骤或领奖阶段约束。
+
+此模式使用 PyAutoGUI 平滑移动系统鼠标并点击，不使用顺序场景的 `PostMessageW`。日志会记录鼠标到达坐标及物理点击已发送；这只能确认系统输入已发出，不代表游戏控件响应。模板应裁取真正的交互按钮，而不是标题、图标或奖励装饰图。比如当前 `assets/targets/confirm.png` 是“阴阳师”标题装饰图，不是确认按钮，需替换成实际确认控件截图，否则点击可能没有可见效果。这是实际鼠标输入，会移动光标；运行前确认游戏窗口位于正确桌面位置且允许成为前台窗口，必要时先聚焦游戏。按住 Esc 可紧急停止，移动鼠标到屏幕左上角也会触发 PyAutoGUI failsafe。
+
+没有目标命中就继续等待，期间可按 Esc 或 Ctrl+Shift+Q 停止。窗口捕获、图像处理或点击异常，以及点击越界，会停止并记录诊断。点击仍受白名单、`min_click_interval_seconds`、各目标的 `wait_after_seconds`、dry-run 和总点击上限约束。该模式不判断奖励是否领取成功，也不统计完整轮数；重新出现 start 时会按普通目标点击并继续任务。
+
+```yaml
+name: yuhun_match_any
+execution_mode: match_any
+max_clicks: 2400
+steps:
+  - id: start
+    type: match_and_click
+    image: ../../assets/targets/start.png
+    threshold: 0.86
+    wait_after_seconds: 1
+```
+
+这是目标列表片段，完整配置还包括 confirm 和 reward。`max_clicks: 2400` 仅限制累计点击数，不代表保证完成 800 轮。可修改成其他非负整数；省略时使用全局配置。此模式不支持 `max_clicks: auto`、重复轮数、多帧确认、恢复扫描和步骤转换规则，配置了这些规则会报错，避免误以为仍受顺序约束。目标的 `timeout_seconds` 不用于退出条件；未命中可以持续等待。每次启动重新计数，dry-run 也计入点击上限。
+
+GUI 打开并保存此场景会保留模式；目标的添加、删除和图片编辑沿用原界面。其他任务也可配置独立的 `match_any` YAML，普通顺序场景默认仍使用 `execution_mode: sequential`。
+
+## 顺序领奖流程
+
 `YYSscript/yuhun/scenario.reward-once.yaml` 执行一次 `start -> confirm -> reward -> start`：前三步匹配并点击，最后只等待开始界面重新出现，然后结束，不点击下一轮开始。它不会执行旧示例中的 victory 或重复 confirm 步骤。
 
 ```powershell
@@ -131,6 +164,7 @@ python run.py --config config.yaml --gui scenario.example.yaml
 | `scenario.start-only.yaml` | 单次开始按钮测试 |
 | `scenario.reward-once.yaml` | 一次完整领奖流程 |
 | `scenario.reward-repeat.yaml` | 重复相同完整流程，最多 800 轮 |
+| `scenario.match-any.yaml` | 无顺序匹配图片，命中即点击，按累计点击数停止 |
 
 ```powershell
 .\.venv\Scripts\python.exe -B run.py --config config.yaml --validate-scenario YYSscript/yuhun/scenario.reward-repeat.yaml

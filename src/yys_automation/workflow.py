@@ -77,6 +77,8 @@ class WorkflowRunner:
         self._resume_index: int | None = None
 
     def run(self) -> bool:
+        if self.scenario.execution_mode == "match_any":
+            return self._run_match_any()
         cycle_limit = self.scenario.cycle_limit
         clicks_per_cycle = self.scenario.clicks_per_cycle
         required_clicks = self.scenario.click_attempts_per_cycle
@@ -106,6 +108,62 @@ class WorkflowRunner:
             self.logger.info("Scenario reached safety cycle limit: %d", self.scenario.max_cycles)
         self.logger.info("Scenario completed: %s cycles=%d", self.scenario.name, self.cycles_done)
         return True
+
+    def _run_match_any(self) -> bool:
+        self.logger.info("Match-any starting: targets=%s max_clicks=%s source=%s dry_run=%s; no step order or cycle count",
+                         [step.id for step in self.scenario.steps], self.max_clicks,
+                         self.budget_source, self.config.dry_run)
+        active = self.scenario.steps[0]
+        last_diagnostic = float("-inf")
+        try:
+            detectors = [(step, self._detector(step)) for step in self.scenario.steps]
+            while not self._should_stop():
+                if self.max_clicks is not None and self.clicks_done >= self.max_clicks:
+                    self.logger.info("Match-any click limit reached: clicks=%d max=%d", self.clicks_done, self.max_clicks)
+                    return True
+                if self.clicks_done:
+                    remaining = self.config.min_click_interval_seconds - (time.monotonic() - self.last_click_at)
+                    if remaining > 0:
+                        if not self._sleep_with_stop(remaining):
+                            return False
+                        continue
+                frame = self.source.grab()
+                self.last_frame = frame
+                matches = []
+                for step, detector in detectors:
+                    active = step
+                    match = detector.find_best(frame.image)
+                    if match is not None:
+                        matches.append((step, match))
+                if self._should_stop():
+                    return False
+                if not matches:
+                    if time.monotonic() - last_diagnostic >= 5:
+                        self.logger.info("Match-any waiting: no target found; scores=%s",
+                                         {step.id: round(detector.last_score, 4) for step, detector in detectors})
+                        last_diagnostic = time.monotonic()
+                    if not self._sleep_with_stop(self.config.scan_interval_seconds):
+                        return False
+                    continue
+                active, match = max(matches, key=lambda item: item[1].score)
+                box = frame.to_screen_region(match.box)
+                point = self.clicker.pick_point_inside(box, random.Random())
+                self.logger.info("Match-any target=%s score=%.4f point=(%d,%d)", active.id, match.score, *point)
+                if not self._perform_click_if_allowed(active, frame, *point):
+                    if not self._should_stop():
+                        self._save_failure(active)
+                    return False
+                self.logger.info("Match-any action count=%d", self.clicks_done)
+                if not self._sleep_with_stop(self.config.scan_interval_seconds):
+                    return False
+        except Exception:
+            self.failure_reason = "error"
+            self.logger.exception("Match-any failed: target=%s", active.id)
+            if not self._should_stop():
+                self._save_failure(active)
+            return False
+        self.logger.info("Match-any stopped by user: clicks=%d", self.clicks_done)
+        return False
 
     def _run_cycle(self) -> bool:
         for attempt in range(1, self.scenario.max_retries + 1):

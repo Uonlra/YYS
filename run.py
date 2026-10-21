@@ -232,6 +232,12 @@ def main() -> int:
             return 1
         scenario = load_scenario(scenario_path)
         click_budget, budget_source = scenario.click_budget(config)
+        if scenario.execution_mode == "match_any":
+            print(
+                f"Scenario valid: {scenario.name} execution_mode=match_any targets={len(scenario.steps)} "
+                f"max_clicks={click_budget if click_budget is not None else 'unlimited'} budget_source={budget_source}"
+            )
+            return 0
         print(
             f"Scenario valid: {scenario.name} steps={len(scenario.steps)} "
             f"cycles={scenario.cycle_limit} retries={scenario.max_retries} "
@@ -246,6 +252,7 @@ def main() -> int:
         from src.yys_automation.safety import StopController
         from src.yys_automation.window_screen import WindowScreenCapture
         from src.yys_automation.workflow import WorkflowRunner
+        from src.yys_automation.clicker import HumanLikeClicker
         from src.yys_automation.window_clicker import WindowMessageClicker
 
         if config.capture_mode != "window":
@@ -262,9 +269,17 @@ def main() -> int:
         logger = setup_logging(config.log_file)
         stop_controller = StopController(logger)
         source = WindowScreenCapture(config.window)
-        clicker = WindowMessageClicker(config, logger)
+        clicker = (
+            HumanLikeClicker(config, logger)
+            if scenario.execution_mode == "match_any"
+            else WindowMessageClicker(config, logger)
+        )
         try:
             stop_controller.start()
+            logger.info(
+                "Click backend: %s",
+                "pyautogui physical mouse" if scenario.execution_mode == "match_any" else "window messages",
+            )
             return 0 if WorkflowRunner(
                 scenario,
                 config,

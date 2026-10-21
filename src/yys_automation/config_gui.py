@@ -239,6 +239,7 @@ class ScenarioEditor:
         try:
             payload = {
                 "name": self.scenario.name if self.scenario else path.stem,
+                "execution_mode": self.scenario.execution_mode if self.scenario else "sequential",
                 "max_retries": self.scenario.max_retries if self.scenario else 3,
                 "retry_after_clicks": self.scenario.retry_after_clicks if self.scenario else False,
                 "repeat_count": self.scenario.repeat_count if self.scenario else 1,
@@ -265,6 +266,7 @@ class ScenarioEditor:
         try:
             payload = {
                 "name": self.scenario.name if self.scenario else path.stem,
+                "execution_mode": self.scenario.execution_mode if self.scenario else "sequential",
                 "max_retries": self.scenario.max_retries if self.scenario else 3,
                 "retry_after_clicks": self.scenario.retry_after_clicks if self.scenario else False,
                 "repeat_count": self.scenario.repeat_count if self.scenario else 1,
