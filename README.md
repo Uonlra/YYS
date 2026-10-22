@@ -313,6 +313,8 @@ GUI 可编辑步骤最大尝试数、下一步骤、响应等待和恢复候选�
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
+GitHub Actions 会在 Windows runner 上使用 Python 3.11、3.12 和 3.13 重复执行源码编译、全量测试和正式场景校验。
+
 运行后：
 
 - 目标图片出现并且匹配度超过阈值时，程序会点击目标中心附近
