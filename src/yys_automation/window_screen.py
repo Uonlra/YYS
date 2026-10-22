@@ -16,7 +16,11 @@ class WindowScreenCapture:
         self.locator = WindowLocator()
 
     def grab(self) -> Frame:
-        window = self.locator.find_first(self.config.title_contains)
+        window = self.locator.find_first(
+            self.config.title_contains,
+            handle=self.config.handle,
+            process_id=self.config.process_id,
+        )
         if window is None:
             raise WindowCaptureError(f"Window not found: {self.config.title_contains}")
 

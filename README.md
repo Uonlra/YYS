@@ -89,6 +89,19 @@ allowed_region:
 
 `allowed_region` 是点击白名单区域。桌面模式只截取该区域；窗口模式截取整个客户区，但只允许点击映射后的白名单区域。
 
+窗口定位默认使用 `title_contains`。如果系统中有多个同名窗口，可在 `window` 下配置固定 `handle`（HWND）和/或 `process_id`：
+
+```yaml
+window:
+  title_contains: "阴阳师-MuMu模拟器专版" # 可选交叉校验
+  handle: 123456
+  process_id: 1234
+  reference_width: 1280
+  reference_height: 720
+```
+
+配置 `handle` 后只接受该窗口句柄；配置 `process_id` 后还会校验句柄所属进程。建议两者同时配置，避免同名窗口误选或句柄复用。可先运行 `python run.py --config config.yaml --probe-window` 查看当前匹配窗口的句柄和进程 ID。窗口不可见、已关闭、客户区为零或身份校验失败时，程序会按窗口未找到处理。
+
 ## 运行
 
 ```powershell
@@ -317,5 +330,4 @@ GUI 可编辑步骤最大尝试数、下一步骤、响应等待和恢复候选�
 - 增加 OCR 文字识别
 - 增加多目标模板
 - 完善已有场景 GUI 的配置体验
-- 支持固定窗口句柄，避免同名窗口切换
 - 增加 dry-run 模式截图标注预览

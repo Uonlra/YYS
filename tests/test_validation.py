@@ -51,6 +51,26 @@ class ValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "exceeds reference_width"):
             load_config(self.write_config(config))
 
+    def test_window_identity_can_replace_title_matching(self) -> None:
+        config = {**self.config, "window": {"handle": 1234, "reference_width": 100, "reference_height": 50}}
+        loaded = load_config(self.write_config(config))
+        self.assertEqual(loaded.window.title_contains, "")
+        self.assertEqual(loaded.window.handle, 1234)
+        self.assertIsNone(loaded.window.process_id)
+
+    def test_window_process_id_can_replace_title_matching(self) -> None:
+        config = {**self.config, "window": {"process_id": 4321, "reference_width": 100, "reference_height": 50}}
+        loaded = load_config(self.write_config(config))
+        self.assertEqual(loaded.window.title_contains, "")
+        self.assertEqual(loaded.window.process_id, 4321)
+
+    def test_window_identity_values_must_be_positive_integers(self) -> None:
+        for field in ("handle", "process_id"):
+            with self.subTest(field=field):
+                config = {**self.config, "window": {field: 0, "reference_width": 100, "reference_height": 50}}
+                with self.assertRaisesRegex(ValueError, rf"window\.{field} must be a positive integer"):
+                    load_config(self.write_config(config))
+
     def test_undecodable_target_is_rejected(self) -> None:
         bad_image = self.root / "bad.png"
         bad_image.write_text("not an image", encoding="utf-8")
