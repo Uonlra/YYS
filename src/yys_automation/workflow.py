@@ -72,6 +72,7 @@ class WorkflowRunner:
         self.failure_reason = ""
         self.last_frame: Frame | None = None
         self._detectors: dict[str, TemplateDetector] = {}
+        self._search_region = config.allowed_region if config.capture_mode == "window" else None
         self._recovery_entry = False
         self._cycle_actions: set[str] = set()
         self._resume_index: int | None = None
@@ -298,6 +299,7 @@ class WorkflowRunner:
                 self.config.template_scale_min,
                 self.config.template_scale_max,
                 self.config.template_scale_step,
+                self._search_region,
             )
 
         deadline = time.monotonic() + step.timeout_seconds
@@ -373,6 +375,7 @@ class WorkflowRunner:
             self._detectors[step.id] = TemplateDetector(
                 step.image, step.threshold if step.threshold is not None else self.config.threshold,
                 self.config.template_scale_min, self.config.template_scale_max, self.config.template_scale_step,
+                self._search_region,
             )
         return self._detectors[step.id]
 
