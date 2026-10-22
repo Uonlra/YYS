@@ -61,6 +61,8 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
+项目依赖由 `pyproject.toml` 统一声明；`requirements.txt` 保留为本地源码安装入口。也可以直接运行 `pip install -e .`。
+
 ## 配置
 
 复制示例配置：
