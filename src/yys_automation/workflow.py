@@ -110,11 +110,23 @@ class WorkflowRunner:
         return True
 
     def _run_match_any(self) -> bool:
+        click_interval = (
+            self.scenario.match_any_click_interval_seconds
+            if self.scenario.match_any_click_interval_seconds is not None
+            else self.config.min_click_interval_seconds
+        )
         self.logger.info("Match-any starting: targets=%s max_clicks=%s source=%s dry_run=%s; no step order or cycle count",
                          [step.id for step in self.scenario.steps], self.max_clicks,
                          self.budget_source, self.config.dry_run)
+        self.logger.info("Match-any minimum click interval: %.2f seconds", click_interval)
+        if self.scenario.consecutive_miss_limit is not None:
+            self.logger.info("Match-any consecutive miss limit: %d frames", self.scenario.consecutive_miss_limit)
+        if self.scenario.no_target_timeout_seconds is not None:
+            self.logger.info("Match-any no-target timeout: %.1f seconds", self.scenario.no_target_timeout_seconds)
         active = self.scenario.steps[0]
         last_diagnostic = float("-inf")
+        consecutive_misses = 0
+        no_target_since = time.monotonic()
         try:
             detectors = [(step, self._detector(step)) for step in self.scenario.steps]
             while not self._should_stop():
@@ -122,7 +134,7 @@ class WorkflowRunner:
                     self.logger.info("Match-any click limit reached: clicks=%d max=%d", self.clicks_done, self.max_clicks)
                     return True
                 if self.clicks_done:
-                    remaining = self.config.min_click_interval_seconds - (time.monotonic() - self.last_click_at)
+                    remaining = click_interval - (time.monotonic() - self.last_click_at)
                     if remaining > 0:
                         if not self._sleep_with_stop(remaining):
                             return False
@@ -138,13 +150,39 @@ class WorkflowRunner:
                 if self._should_stop():
                     return False
                 if not matches:
+                    consecutive_misses += 1
                     if time.monotonic() - last_diagnostic >= 5:
-                        self.logger.info("Match-any waiting: no target found; scores=%s",
+                        self.logger.info("Match-any waiting: no target found consecutive_misses=%d%s scores=%s",
+                                         consecutive_misses,
+                                         f"/{self.scenario.consecutive_miss_limit}" if self.scenario.consecutive_miss_limit else "",
                                          {step.id: round(detector.last_score, 4) for step, detector in detectors})
                         last_diagnostic = time.monotonic()
+                    no_target_elapsed = time.monotonic() - no_target_since
+                    if (self.scenario.no_target_timeout_seconds is not None
+                            and no_target_elapsed >= self.scenario.no_target_timeout_seconds):
+                        self.failure_reason = "no_target_timeout"
+                        self.logger.error(
+                            "Match-any stopped: no target detected for %.1f seconds; clicks=%d",
+                            no_target_elapsed, self.clicks_done,
+                        )
+                        self._save_failure(active)
+                        self._show_no_target_timeout_alert(no_target_elapsed)
+                        return False
+                    if (self.scenario.consecutive_miss_limit is not None
+                            and consecutive_misses >= self.scenario.consecutive_miss_limit):
+                        self.logger.info(
+                            "Match-any stopped after %d consecutive frames without a target; clicks=%d",
+                            consecutive_misses, self.clicks_done,
+                        )
+                        return True
                     if not self._sleep_with_stop(self.config.scan_interval_seconds):
                         return False
                     continue
+                if consecutive_misses:
+                    self.logger.info("Match-any target detected; resetting consecutive miss count from %d",
+                                     consecutive_misses)
+                consecutive_misses = 0
+                no_target_since = time.monotonic()
                 active, match = max(matches, key=lambda item: item[1].score)
                 box = frame.to_screen_region(match.box)
                 point = self.clicker.pick_point_inside(box, random.Random())
@@ -164,6 +202,19 @@ class WorkflowRunner:
             return False
         self.logger.info("Match-any stopped by user: clicks=%d", self.clicks_done)
         return False
+
+    def _show_no_target_timeout_alert(self, elapsed_seconds: float) -> None:
+        message = (
+            f"Scenario '{self.scenario.name}' stopped because no target image was detected "
+            f"for {elapsed_seconds:.1f} seconds.\n"
+            f"Clicks sent: {self.clicks_done}. See the automation log and failure screenshot."
+        )
+        try:
+            import ctypes
+
+            ctypes.windll.user32.MessageBoxW(None, message, "YYS automation stopped", 0x10 | 0x40000)
+        except Exception as exc:
+            self.logger.error("Could not display no-target timeout dialog: %s", exc)
 
     def _run_cycle(self) -> bool:
         for attempt in range(1, self.scenario.max_retries + 1):

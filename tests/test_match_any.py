@@ -118,11 +118,56 @@ class MatchAnyTests(unittest.TestCase):
         save.assert_called_once()
         self.assertEqual(runner.clicks_done, 0)
 
+    def test_ten_consecutive_unmatched_frames_exit_normally(self) -> None:
+        runner = self.runner([0], limit=20)
+        runner.scenario = replace(runner.scenario, consecutive_miss_limit=10)
+        with patch.object(runner.source, "grab", wraps=runner.source.grab) as capture, self.assertLogs(
+            runner.logger, level="INFO"
+        ) as logs:
+            self.assertTrue(runner.run())
+        self.assertEqual(capture.call_count, 10)
+        self.assertEqual(runner.clicks_done, 0)
+        self.assertTrue(any("stopped after 10 consecutive frames" in line for line in logs.output))
+
+    def test_match_resets_miss_counter(self) -> None:
+        runner = self.runner([0, 0, 2, 0, 0, 0, 0], limit=10)
+        runner.scenario = replace(runner.scenario, consecutive_miss_limit=3)
+        with patch.object(runner.source, "grab", wraps=runner.source.grab) as capture:
+            self.assertTrue(runner.run())
+        self.assertEqual(capture.call_count, 6)
+        self.assertEqual(runner.clicks_done, 1)
+
+    def test_no_target_timeout_saves_screenshot_alerts_and_exits_as_failure(self) -> None:
+        runner = self.runner([0], limit=20)
+        runner.scenario = replace(runner.scenario, no_target_timeout_seconds=0.05)
+        with patch.object(runner, "_save_failure") as save, patch.object(
+            runner, "_show_no_target_timeout_alert"
+        ) as alert, patch.object(runner.source, "grab", wraps=runner.source.grab) as capture:
+            self.assertFalse(runner.run())
+        self.assertEqual(capture.call_count, 6)
+        save.assert_called_once()
+        self.assertAlmostEqual(alert.call_args.args[0], 0.05)
+        self.assertEqual(runner.failure_reason, "no_target_timeout")
+
+    def test_target_match_resets_elapsed_no_target_timer(self) -> None:
+        runner = self.runner([0, 0, 2, 0, 0, 0, 0], limit=20)
+        runner.scenario = replace(runner.scenario, no_target_timeout_seconds=0.05)
+        with patch.object(runner, "_save_failure") as save, patch.object(
+            runner, "_show_no_target_timeout_alert"
+        ) as alert, patch.object(runner.source, "grab", wraps=runner.source.grab) as capture:
+            self.assertFalse(runner.run())
+        self.assertEqual(runner.clicks_done, 1)
+        self.assertGreaterEqual(capture.call_count, 5)
+        save.assert_called_once()
+        alert.assert_called_once()
+
     def test_shipped_config_is_unordered_and_bounded(self) -> None:
         scenario = load_scenario(Path(__file__).resolve().parents[1] / "YYSscript/yuhun/scenario.match-any.yaml")
         self.assertEqual(scenario.execution_mode, "match_any")
         self.assertEqual(scenario.input_backend, "window_message")
         self.assertEqual(scenario.max_clicks, 2400)
+        self.assertIsNone(scenario.consecutive_miss_limit)
+        self.assertEqual(scenario.no_target_timeout_seconds, 60)
         self.assertEqual([step.image.stem for step in scenario.steps], ["start", "confirm", "reward"])
 
     def test_match_any_cli_selects_configured_input_backend(self) -> None:

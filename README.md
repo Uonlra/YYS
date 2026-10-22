@@ -120,9 +120,9 @@ python run.py --config config.yaml --gui scenario.example.yaml
 .\.venv\Scripts\python.exe -B run.py --config config.yaml --scenario YYSscript/yuhun/scenario.match-any.yaml
 ```
 
-`scenario.match-any.yaml` 设置 `execution_mode: match_any`，将 start、confirm、reward 作为无顺序目标列表。每次截图匹配所有目标，达到各自阈值后点击；多图同时命中时选匹配分数最高的一张，分数相同按配置顺序选择。每帧最多点击一次，随后等待冷却并重新截图。图片一直存在时会在冷却后再次点击，不受三次动作尝试、前后步骤或领奖阶段约束。
+`scenario.match-any.yaml` 设置 `execution_mode: match_any`，将 start、confirm、reward 作为无顺序目标列表。每次截图匹配所有目标，达到各自阈值后点击；多图同时命中时选匹配分数最高的一张，分数相同按配置顺序选择。每帧最多点击一次，随后等待冷却并重新截图。图片一直存在时会在冷却后再次点击，不受三次动作尝试、前后步骤或领奖阶段约束。连续 60 秒未命中任何目标时，会保存失败截图、弹出错误对话框并以失败状态退出；扫描到任一目标就从该时刻重新计时。
 
-点击后端由 `input_backend` 选择。`physical_mouse` 使用 PyAutoGUI 移动系统鼠标并点击，窗口必须位于桌面最前方，否则物理坐标可能点到遮挡窗口；`window_message` 使用 PostMessage 向目标窗口发消息，不移动光标，可尝试后台窗口，但应用可能忽略后台输入。MuMu/游戏是否接受后台消息取决于其输入实现，不能保证所有遮挡或最小化状态下都工作。日志会说明所选后端；窗口消息失败时会分别记录按下和抬起消息的发送状态。
+点击后端由 `input_backend` 选择。`physical_mouse` 使用 PyAutoGUI 移动系统鼠标并点击，窗口必须位于桌面最前方，否则物理坐标可能点到遮挡窗口；`window_message` 使用 PostMessage 向目标窗口发消息，不移动光标，可尝试后台窗口，但应用可能忽略后台输入。当前 MuMu 配置需让脚本和模拟器以管理员身份运行；PyCharm 内置终端应由管理员权限启动的 PyCharm 打开。最小化窗口不保证能正确截图或响应点击。日志会说明所选后端；窗口消息失败时会分别记录按下和抬起消息的发送状态。
 
 ```yaml
 input_backend: window_message
@@ -135,6 +135,7 @@ input_backend: window_message
 ```yaml
 name: yuhun_match_any
 execution_mode: match_any
+no_target_timeout_seconds: 60
 max_clicks: 2400
 steps:
   - id: start
@@ -144,7 +145,7 @@ steps:
     wait_after_seconds: 1
 ```
 
-这是目标列表片段，完整配置还包括 confirm 和 reward。`max_clicks: 2400` 仅限制累计点击数，不代表保证完成 800 轮。可修改成其他非负整数；省略时使用全局配置。此模式不支持 `max_clicks: auto`、重复轮数、多帧确认、恢复扫描和步骤转换规则，配置了这些规则会报错，避免误以为仍受顺序约束。目标的 `timeout_seconds` 不用于退出条件；未命中可以持续等待。每次启动重新计数，dry-run 也计入点击上限。
+这是目标列表片段，完整配置还包括 confirm 和 reward。`no_target_timeout_seconds` 从启动或最近一次命中任意目标时开始计时；到时保存截图、弹出 Windows 错误对话框并失败退出。`max_clicks: 2400` 仅限制累计点击数，不代表保证完成 800 轮。可修改成其他非负整数；省略时使用全局配置。此模式不支持 `max_clicks: auto`、重复轮数、多帧确认、恢复扫描和步骤转换规则，配置了这些规则会报错，避免误以为仍受顺序约束。目标的 `timeout_seconds` 不用于退出条件。每次启动重新计数，dry-run 也计入点击上限。
 
 GUI 打开并保存此场景会保留模式；目标的添加、删除和图片编辑沿用原界面。其他任务也可配置独立的 `match_any` YAML，普通顺序场景默认仍使用 `execution_mode: sequential`。
 

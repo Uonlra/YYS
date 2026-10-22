@@ -244,7 +244,11 @@ class ValidationTests(unittest.TestCase):
         path = self.root / "match.yaml"
         cases = ({"max_clicks": "auto"}, {"repeat_count": None}, {"max_retries": 3},
                  {"recovery_scans": 2}, {"stable_frames": 3}, {"execution_mode": []},
-                 {"execution_mode": "unknown"}, {"input_backend": "unknown"})
+                 {"execution_mode": "unknown"}, {"input_backend": "unknown"},
+                 {"consecutive_miss_limit": 0}, {"consecutive_miss_limit": -1},
+                 {"no_target_timeout_seconds": 0}, {"no_target_timeout_seconds": -1},
+                 {"no_target_timeout_seconds": float("nan")},
+                 {"consecutive_miss_limit": 10, "no_target_timeout_seconds": 60})
         for values in cases:
             with self.subTest(values=values):
                 path.write_text(yaml.safe_dump({"execution_mode": "match_any", **values,
@@ -259,8 +263,30 @@ class ValidationTests(unittest.TestCase):
         for method in ("_save", "_save_silently"):
             with self.subTest(method=method):
                 path.write_text(yaml.safe_dump({"execution_mode": "match_any", "input_backend": "window_message", "max_clicks": 12,
+                    "consecutive_miss_limit": 10,
                     "steps": [{"id": "target", "type": "match_and_click", "image": "target.png"}],
                 }), encoding="utf-8")
+                original = load_scenario(path)
+                editor = ScenarioEditor.__new__(ScenarioEditor)
+                editor.scenario = original
+                editor.steps = list(original.steps)
+                editor.path_var = Mock()
+                editor.path_var.get.return_value = str(path)
+                with patch("src.yys_automation.config_gui.messagebox") as messages:
+                    getattr(editor, method)()
+                    messages.showerror.assert_not_called()
+                self.assertEqual(load_scenario(path), original)
+
+    def test_gui_roundtrip_preserves_no_target_timeout(self) -> None:
+        from src.yys_automation.config_gui import ScenarioEditor
+
+        path = self.root / "match-timeout.yaml"
+        payload = {"execution_mode": "match_any", "input_backend": "window_message",
+                   "max_clicks": 12, "no_target_timeout_seconds": 60,
+                   "steps": [{"id": "target", "type": "match_and_click", "image": "target.png"}]}
+        for method in ("_save", "_save_silently"):
+            with self.subTest(method=method):
+                path.write_text(yaml.safe_dump(payload), encoding="utf-8")
                 original = load_scenario(path)
                 editor = ScenarioEditor.__new__(ScenarioEditor)
                 editor.scenario = original
