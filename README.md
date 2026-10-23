@@ -61,6 +61,8 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
+项目依赖由 `pyproject.toml` 统一声明；`requirements.txt` 保留为本地源码安装入口。也可以直接运行 `pip install -e .`。
+
 ## 配置
 
 复制示例配置：
@@ -88,6 +90,21 @@ allowed_region:
 ```
 
 `allowed_region` 是点击白名单区域。桌面模式只截取该区域；窗口模式截取整个客户区，但只允许点击映射后的白名单区域。
+
+窗口模式下模板匹配也会使用 `allowed_region` 作为搜索 ROI，只扫描允许点击的参考区域；桌面模式的截图本身已经是该区域。每个模板的不同缩放版本会在首次创建检测器时缓存，连续扫描不会重复缩放图片。
+
+窗口定位默认使用 `title_contains`。如果系统中有多个同名窗口，可在 `window` 下配置固定 `handle`（HWND）和/或 `process_id`：
+
+```yaml
+window:
+  title_contains: "阴阳师-MuMu模拟器专版" # 可选交叉校验
+  handle: 123456
+  process_id: 1234
+  reference_width: 1280
+  reference_height: 720
+```
+
+配置 `handle` 后只接受该窗口句柄；配置 `process_id` 后还会校验句柄所属进程。建议两者同时配置，避免同名窗口误选或句柄复用。可先运行 `python run.py --config config.yaml --probe-window` 查看当前匹配窗口的句柄和进程 ID。窗口不可见、已关闭、客户区为零或身份校验失败时，程序会按窗口未找到处理。
 
 ## 运行
 
@@ -120,9 +137,9 @@ python run.py --config config.yaml --gui scenario.example.yaml
 .\.venv\Scripts\python.exe -B run.py --config config.yaml --scenario YYSscript/yuhun/scenario.match-any.yaml
 ```
 
-`scenario.match-any.yaml` 设置 `execution_mode: match_any`，将 start、confirm、reward 作为无顺序目标列表。每次截图匹配所有目标，达到各自阈值后点击；多图同时命中时选匹配分数最高的一张，分数相同按配置顺序选择。每帧最多点击一次，随后等待冷却并重新截图。图片一直存在时会在冷却后再次点击，不受三次动作尝试、前后步骤或领奖阶段约束。
+`scenario.match-any.yaml` 设置 `execution_mode: match_any`，将 start、confirm、reward 作为无顺序目标列表。每次截图匹配所有目标，达到各自阈值后点击；多图同时命中时选匹配分数最高的一张，分数相同按配置顺序选择。可用场景级 `stable_frames` 要求同一组目标连续识别若干帧后才点击，降低单帧误识别；默认值为 1。每帧最多点击一次，随后等待冷却并重新截图。图片一直存在时会在冷却后再次点击，不受三次动作尝试、前后步骤或领奖阶段约束。连续 60 秒未命中任何目标时，会保存失败截图、弹出错误对话框并以失败状态退出；扫描到任一目标就从该时刻重新计时。
 
-点击后端由 `input_backend` 选择。`physical_mouse` 使用 PyAutoGUI 移动系统鼠标并点击，窗口必须位于桌面最前方，否则物理坐标可能点到遮挡窗口；`window_message` 使用 PostMessage 向目标窗口发消息，不移动光标，可尝试后台窗口，但应用可能忽略后台输入。MuMu/游戏是否接受后台消息取决于其输入实现，不能保证所有遮挡或最小化状态下都工作。日志会说明所选后端；窗口消息失败时会分别记录按下和抬起消息的发送状态。
+点击后端由 `input_backend` 选择。`physical_mouse` 使用 PyAutoGUI 移动系统鼠标并点击，窗口必须位于桌面最前方，否则物理坐标可能点到遮挡窗口；`window_message` 使用 PostMessage 向目标窗口发消息，不移动光标，可尝试后台窗口，但应用可能忽略后台输入。当前 MuMu 配置需让脚本和模拟器以管理员身份运行；PyCharm 内置终端应由管理员权限启动的 PyCharm 打开。最小化窗口不保证能正确截图或响应点击。日志会说明所选后端；窗口消息失败时会分别记录按下和抬起消息的发送状态。
 
 ```yaml
 input_backend: window_message
@@ -135,6 +152,7 @@ input_backend: window_message
 ```yaml
 name: yuhun_match_any
 execution_mode: match_any
+no_target_timeout_seconds: 60
 max_clicks: 2400
 steps:
   - id: start
@@ -144,7 +162,7 @@ steps:
     wait_after_seconds: 1
 ```
 
-这是目标列表片段，完整配置还包括 confirm 和 reward。`max_clicks: 2400` 仅限制累计点击数，不代表保证完成 800 轮。可修改成其他非负整数；省略时使用全局配置。此模式不支持 `max_clicks: auto`、重复轮数、多帧确认、恢复扫描和步骤转换规则，配置了这些规则会报错，避免误以为仍受顺序约束。目标的 `timeout_seconds` 不用于退出条件；未命中可以持续等待。每次启动重新计数，dry-run 也计入点击上限。
+这是目标列表片段，完整配置还包括 confirm 和 reward。`no_target_timeout_seconds` 从启动或最近一次命中任意目标时开始计时；到时保存截图、弹出 Windows 错误对话框并失败退出。`max_clicks: 2400` 仅限制累计点击数，不代表保证完成 800 轮。可修改成其他非负整数；省略时使用全局配置。此模式不支持 `max_clicks: auto`、重复轮数、多帧确认、恢复扫描和步骤转换规则，配置了这些规则会报错，避免误以为仍受顺序约束。目标的 `timeout_seconds` 不用于退出条件。每次启动重新计数，dry-run 也计入点击上限。
 
 GUI 打开并保存此场景会保留模式；目标的添加、删除和图片编辑沿用原界面。其他任务也可配置独立的 `match_any` YAML，普通顺序场景默认仍使用 `execution_mode: sequential`。
 
@@ -268,6 +286,8 @@ GUI 可编辑步骤最大尝试数、下一步骤、响应等待和恢复候选�
 
 ## 日志与现场
 
+运行场景时，程序会在日志目录写入 `automation.status.json`。这是一个原子更新的状态快照，包含当前步骤、步骤耗时、轮数、最近一轮耗时、总运行时长、点击数、点击预算、最近匹配分数、匹配位置和失败原因；GUI 每 500 毫秒读取它并显示运行进度。任务结束后状态会标记为 `completed` 或 `stopped`，可供外部监控工具读取。
+
 `logs/automation.log` 以追加方式写入，达到 5 MiB 自动轮转为 `.1` 到 `.5`，最多五份归档，文件总量通常约 30 MiB；超过保留数量的旧归档会自动淘汰。原有日志不清空，过大时会在下一条记录触发轮转；单条超长记录可能略超限。重复初始化日志会关闭旧处理器，避免句柄泄漏。不要让多个进程同时写入并轮转同一个日志文件；同时运行不同实例请使用不同 `log_file`。
 
 步骤失败会尝试将归一化后的窗口画面保存到日志文件旁的 `failures/`，仅保留最新 20 张 `failure_*.png`。截图数量受限，文件大小取决于分辨率。日志记录失败原因、步骤、完成轮数、点击数、坐标变换和匹配诊断。无法获取新画面时回退到最近一次截图，并标记 `source=last_capture`；完全没有画面时只记录原因。磁盘写入失败不会阻止任务退出，用户按停止不会生成失败截图。
@@ -295,6 +315,8 @@ GUI 可编辑步骤最大尝试数、下一步骤、响应等待和恢复候选�
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
+GitHub Actions 会在 Windows runner 上使用 Python 3.11、3.12 和 3.13 重复执行源码编译、全量测试和正式场景校验。
+
 运行后：
 
 - 目标图片出现并且匹配度超过阈值时，程序会点击目标中心附近
@@ -316,5 +338,4 @@ GUI 可编辑步骤最大尝试数、下一步骤、响应等待和恢复候选�
 - 增加 OCR 文字识别
 - 增加多目标模板
 - 完善已有场景 GUI 的配置体验
-- 支持固定窗口句柄，避免同名窗口切换
 - 增加 dry-run 模式截图标注预览

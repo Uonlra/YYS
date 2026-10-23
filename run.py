@@ -293,13 +293,18 @@ def main() -> int:
         finally:
             stop_controller.stop()
     if args.probe_window:
-        window = WindowLocator().find_first(config.window.title_contains)
+        window = WindowLocator().find_first(
+            config.window.title_contains,
+            handle=config.window.handle,
+            process_id=config.window.process_id,
+        )
         if window is None:
             print(f"Window not found: {config.window.title_contains}")
             return 1
         print(
             f"Window: {window.title}\n"
             f"Handle: {window.handle}\n"
+            f"Process ID: {window.process_id}\n"
             f"Client: left={window.client_left} top={window.client_top} "
             f"width={window.client_width} height={window.client_height}"
         )
@@ -307,7 +312,11 @@ def main() -> int:
     if args.capture_window:
         from src.yys_automation.window_capture import WindowCaptureError, save_capture
 
-        window = WindowLocator().find_first(config.window.title_contains)
+        window = WindowLocator().find_first(
+            config.window.title_contains,
+            handle=config.window.handle,
+            process_id=config.window.process_id,
+        )
         if window is None:
             print(f"Window not found: {config.window.title_contains}")
             return 1

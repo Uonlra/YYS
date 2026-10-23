@@ -6,6 +6,8 @@ capture_mode: "window"
 
 window:
   title_contains: "阴阳师-MuMu模拟器专版"
+  # handle: 123456
+  # process_id: 1234
   reference_width: 1280
   reference_height: 720
 

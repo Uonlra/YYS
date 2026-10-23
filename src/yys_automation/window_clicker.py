@@ -29,7 +29,11 @@ class WindowMessageClicker:
         import ctypes
         from ctypes import wintypes
 
-        window = self.locator.find_first(self.config.window.title_contains)
+        window = self.locator.find_first(
+            self.config.window.title_contains,
+            handle=self.config.window.handle,
+            process_id=self.config.window.process_id,
+        )
         if window is None:
             raise RuntimeError(f"Window not found: {self.config.window.title_contains}")
 

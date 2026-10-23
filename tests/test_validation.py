@@ -51,6 +51,26 @@ class ValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "exceeds reference_width"):
             load_config(self.write_config(config))
 
+    def test_window_identity_can_replace_title_matching(self) -> None:
+        config = {**self.config, "window": {"handle": 1234, "reference_width": 100, "reference_height": 50}}
+        loaded = load_config(self.write_config(config))
+        self.assertEqual(loaded.window.title_contains, "")
+        self.assertEqual(loaded.window.handle, 1234)
+        self.assertIsNone(loaded.window.process_id)
+
+    def test_window_process_id_can_replace_title_matching(self) -> None:
+        config = {**self.config, "window": {"process_id": 4321, "reference_width": 100, "reference_height": 50}}
+        loaded = load_config(self.write_config(config))
+        self.assertEqual(loaded.window.title_contains, "")
+        self.assertEqual(loaded.window.process_id, 4321)
+
+    def test_window_identity_values_must_be_positive_integers(self) -> None:
+        for field in ("handle", "process_id"):
+            with self.subTest(field=field):
+                config = {**self.config, "window": {field: 0, "reference_width": 100, "reference_height": 50}}
+                with self.assertRaisesRegex(ValueError, rf"window\.{field} must be a positive integer"):
+                    load_config(self.write_config(config))
+
     def test_undecodable_target_is_rejected(self) -> None:
         bad_image = self.root / "bad.png"
         bad_image.write_text("not an image", encoding="utf-8")
@@ -243,14 +263,25 @@ class ValidationTests(unittest.TestCase):
     def test_match_any_rejects_flow_controls_and_invalid_modes(self) -> None:
         path = self.root / "match.yaml"
         cases = ({"max_clicks": "auto"}, {"repeat_count": None}, {"max_retries": 3},
-                 {"recovery_scans": 2}, {"stable_frames": 3}, {"execution_mode": []},
-                 {"execution_mode": "unknown"}, {"input_backend": "unknown"})
+                 {"recovery_scans": 2}, {"execution_mode": []},
+                 {"execution_mode": "unknown"}, {"input_backend": "unknown"},
+                 {"consecutive_miss_limit": 0}, {"consecutive_miss_limit": -1},
+                 {"no_target_timeout_seconds": 0}, {"no_target_timeout_seconds": -1},
+                 {"no_target_timeout_seconds": float("nan")},
+                 {"consecutive_miss_limit": 10, "no_target_timeout_seconds": 60})
         for values in cases:
             with self.subTest(values=values):
                 path.write_text(yaml.safe_dump({"execution_mode": "match_any", **values,
                     "steps": [{"id": "target", "type": "match_and_click", "image": "target.png"}],
                 }), encoding="utf-8")
                 self.assertTrue(validate_scenario(path))
+
+    def test_match_any_accepts_multi_frame_confirmation(self) -> None:
+        path = self.root / "match.yaml"
+        path.write_text(yaml.safe_dump({"execution_mode": "match_any", "stable_frames": 3,
+            "steps": [{"id": "target", "type": "match_and_click", "image": "target.png"}],
+        }), encoding="utf-8")
+        self.assertEqual(validate_scenario(path), [])
 
     def test_gui_roundtrip_preserves_match_any_mode(self) -> None:
         from src.yys_automation.config_gui import ScenarioEditor
@@ -259,8 +290,30 @@ class ValidationTests(unittest.TestCase):
         for method in ("_save", "_save_silently"):
             with self.subTest(method=method):
                 path.write_text(yaml.safe_dump({"execution_mode": "match_any", "input_backend": "window_message", "max_clicks": 12,
+                    "consecutive_miss_limit": 10,
                     "steps": [{"id": "target", "type": "match_and_click", "image": "target.png"}],
                 }), encoding="utf-8")
+                original = load_scenario(path)
+                editor = ScenarioEditor.__new__(ScenarioEditor)
+                editor.scenario = original
+                editor.steps = list(original.steps)
+                editor.path_var = Mock()
+                editor.path_var.get.return_value = str(path)
+                with patch("src.yys_automation.config_gui.messagebox") as messages:
+                    getattr(editor, method)()
+                    messages.showerror.assert_not_called()
+                self.assertEqual(load_scenario(path), original)
+
+    def test_gui_roundtrip_preserves_no_target_timeout(self) -> None:
+        from src.yys_automation.config_gui import ScenarioEditor
+
+        path = self.root / "match-timeout.yaml"
+        payload = {"execution_mode": "match_any", "input_backend": "window_message",
+                   "max_clicks": 12, "no_target_timeout_seconds": 60,
+                   "steps": [{"id": "target", "type": "match_and_click", "image": "target.png"}]}
+        for method in ("_save", "_save_silently"):
+            with self.subTest(method=method):
+                path.write_text(yaml.safe_dump(payload), encoding="utf-8")
                 original = load_scenario(path)
                 editor = ScenarioEditor.__new__(ScenarioEditor)
                 editor.scenario = original

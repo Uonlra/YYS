@@ -11,12 +11,19 @@ class WindowInfo:
     client_top: int
     client_width: int
     client_height: int
+    process_id: int = 0
 
 
 class WindowLocator:
     """Locate a visible Windows window and expose its client-area geometry."""
 
-    def find_first(self, title_contains: str) -> WindowInfo | None:
+    def find_first(
+        self,
+        title_contains: str = "",
+        *,
+        handle: int | None = None,
+        process_id: int | None = None,
+    ) -> WindowInfo | None:
         try:
             import ctypes
             from ctypes import wintypes
@@ -28,6 +35,8 @@ class WindowLocator:
 
         @ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
         def callback(hwnd: int, _lparam: int) -> bool:
+            if handle is not None and int(hwnd) != handle:
+                return True
             if not user32.IsWindowVisible(hwnd):
                 return True
             length = user32.GetWindowTextLengthW(hwnd)
@@ -36,7 +45,13 @@ class WindowLocator:
             buffer = ctypes.create_unicode_buffer(length + 1)
             user32.GetWindowTextW(hwnd, buffer, length + 1)
             title = buffer.value
-            if title_contains.lower() not in title.lower():
+            if title_contains and title_contains.lower() not in title.lower():
+                return True
+
+            owner_pid = wintypes.DWORD()
+            if not user32.GetWindowThreadProcessId(hwnd, ctypes.byref(owner_pid)):
+                return True
+            if process_id is not None and int(owner_pid.value) != process_id:
                 return True
 
             rect = wintypes.RECT()
@@ -54,6 +69,7 @@ class WindowLocator:
             matches.append(
                 WindowInfo(
                     handle=int(hwnd),
+                    process_id=int(owner_pid.value),
                     title=title,
                     client_left=int(point.x),
                     client_top=int(point.y),

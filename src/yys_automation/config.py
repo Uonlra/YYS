@@ -44,6 +44,8 @@ class WindowConfig:
     title_contains: str
     reference_width: int
     reference_height: int
+    handle: int | None = None
+    process_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -81,6 +83,7 @@ def load_config(path: Path) -> AppConfig:
     window = _mapping(raw, "window")
     recognition = _mapping(raw, "recognition")
 
+    window_identity_configured = "handle" in window or "process_id" in window
     config = AppConfig(
         target_image=target_image,
         threshold=_finite_float(raw.get("threshold", 0.86), "threshold"),
@@ -107,9 +110,11 @@ def load_config(path: Path) -> AppConfig:
         dry_run=_boolean(raw.get("dry_run", False), "dry_run"),
         log_file=log_file,
         window=WindowConfig(
-            title_contains=str(window.get("title_contains", "阴阳师")),
+            title_contains=str(window.get("title_contains", "" if window_identity_configured else "阴阳师")),
             reference_width=_integer(window, "reference_width", 1280),
             reference_height=_integer(window, "reference_height", 720),
+            handle=_optional_integer(window.get("handle"), "window.handle"),
+            process_id=_optional_integer(window.get("process_id"), "window.process_id"),
         ),
         capture_mode=str(raw.get("capture_mode", "desktop")),
         template_scale_min=_finite_float(recognition.get("template_scale_min", 0.75), "recognition.template_scale_min"),
@@ -131,6 +136,12 @@ def _optional_int(value: Any) -> int | None:
     if value is None:
         return None
     return _as_integer(value, "max_clicks")
+
+
+def _optional_integer(value: Any, name: str) -> int | None:
+    if value is None:
+        return None
+    return _as_integer(value, name)
 
 
 def _required(mapping: dict[str, Any], key: str) -> Any:
@@ -220,8 +231,12 @@ def _validate_config(config: AppConfig) -> None:
         raise ValueError("recognition.template_scale_max must be >= min")
     if config.template_scale_step <= 0:
         raise ValueError("recognition.template_scale_step must be positive")
-    if not config.window.title_contains.strip():
-        raise ValueError("window.title_contains must not be empty")
+    if not config.window.title_contains.strip() and config.window.handle is None and config.window.process_id is None:
+        raise ValueError("window.title_contains must not be empty when no window identity is set")
+    if config.window.handle is not None and config.window.handle <= 0:
+        raise ValueError("window.handle must be a positive integer")
+    if config.window.process_id is not None and config.window.process_id <= 0:
+        raise ValueError("window.process_id must be a positive integer")
     if config.capture_mode == "window":
         if config.allowed_region.left < 0 or config.allowed_region.top < 0:
             raise ValueError("window allowed_region left and top must be >= 0")

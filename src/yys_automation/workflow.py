@@ -14,6 +14,7 @@ from src.yys_automation.config import AppConfig, Region
 from src.yys_automation.detector import TemplateDetector
 from src.yys_automation.scenario import Scenario, ScenarioStep
 from src.yys_automation.screen import Frame
+from src.yys_automation.status import RunStatus
 
 
 class FrameSource(Protocol):
@@ -72,13 +73,40 @@ class WorkflowRunner:
         self.failure_reason = ""
         self.last_frame: Frame | None = None
         self._detectors: dict[str, TemplateDetector] = {}
+        self._search_region = config.allowed_region if config.capture_mode == "window" else None
         self._recovery_entry = False
         self._cycle_actions: set[str] = set()
         self._resume_index: int | None = None
+        self.status = RunStatus(config.log_file.parent / "automation.status.json")
+        self._run_started_at = time.monotonic()
+        self._cycle_started_at: float | None = None
+
+    def _status(self, **values: object) -> None:
+        payload: dict[str, object] = {
+            "state": "running",
+            "scenario": self.scenario.name,
+            "current_step": values.pop("current_step", None),
+            "cycle": self.cycles_done,
+            "clicks": self.clicks_done,
+            "max_clicks": self.max_clicks,
+            "failure_reason": self.failure_reason or None,
+            "runtime_seconds": round(time.monotonic() - self._run_started_at, 3),
+        }
+        payload.update(values)
+        self.status.update(**payload)
+
+    def _scan_interval(self, step: ScenarioStep) -> float:
+        return step.scan_interval_seconds or self.config.scan_interval_seconds
 
     def run(self) -> bool:
+        self._status()
         if self.scenario.execution_mode == "match_any":
-            return self._run_match_any()
+            result = self._run_match_any()
+            self.status.update(state="completed" if result else "stopped", scenario=self.scenario.name,
+                               cycle=self.cycles_done, clicks=self.clicks_done, max_clicks=self.max_clicks,
+                               failure_reason=self.failure_reason or None,
+                               runtime_seconds=round(time.monotonic() - self._run_started_at, 3))
+            return result
         cycle_limit = self.scenario.cycle_limit
         clicks_per_cycle = self.scenario.clicks_per_cycle
         required_clicks = self.scenario.click_attempts_per_cycle
@@ -97,24 +125,57 @@ class WorkflowRunner:
                     "done=%d max=%d required=%d completed_cycles=%d",
                     cycle, self.clicks_done, self.max_clicks, required_clicks, self.cycles_done,
                 )
+                self.status.update(state="stopped", scenario=self.scenario.name, cycle=self.cycles_done,
+                                   clicks=self.clicks_done, max_clicks=self.max_clicks,
+                                   failure_reason="budget",
+                                   runtime_seconds=round(time.monotonic() - self._run_started_at, 3))
                 return False
             self.logger.info("Scenario cycle %d/%d: %s", cycle, cycle_limit, self.scenario.name)
+            self._cycle_started_at = time.monotonic()
+            self._status(current_step="cycle", cycle=cycle)
             if not self._run_cycle():
                 self.logger.error("Scenario stopped: completed_cycles=%d clicks=%d", self.cycles_done, self.clicks_done)
+                self.status.update(state="stopped", scenario=self.scenario.name, cycle=self.cycles_done,
+                                   clicks=self.clicks_done, max_clicks=self.max_clicks,
+                                   failure_reason=self.failure_reason or "cycle_failed",
+                                   runtime_seconds=round(time.monotonic() - self._run_started_at, 3))
                 return False
             self.cycles_done += 1
+            cycle_duration = time.monotonic() - (self._cycle_started_at or time.monotonic())
             self.logger.info("Scenario cycle completed: %d clicks=%d", self.cycles_done, self.clicks_done)
+            self._status(current_step="cycle_completed", last_cycle_duration_seconds=round(cycle_duration, 3),
+                         total_cycles=self.cycles_done)
         if self.scenario.repeat_count is None:
             self.logger.info("Scenario reached safety cycle limit: %d", self.scenario.max_cycles)
         self.logger.info("Scenario completed: %s cycles=%d", self.scenario.name, self.cycles_done)
+        self.status.update(state="completed", scenario=self.scenario.name, cycle=self.cycles_done,
+                           clicks=self.clicks_done, max_clicks=self.max_clicks, failure_reason=None,
+                           runtime_seconds=round(time.monotonic() - self._run_started_at, 3))
         return True
 
     def _run_match_any(self) -> bool:
+        click_interval = (
+            self.scenario.match_any_click_interval_seconds
+            if self.scenario.match_any_click_interval_seconds is not None
+            else self.config.min_click_interval_seconds
+        )
         self.logger.info("Match-any starting: targets=%s max_clicks=%s source=%s dry_run=%s; no step order or cycle count",
                          [step.id for step in self.scenario.steps], self.max_clicks,
                          self.budget_source, self.config.dry_run)
+        self.logger.info("Match-any minimum click interval: %.2f seconds", click_interval)
+        if self.scenario.consecutive_miss_limit is not None:
+            self.logger.info("Match-any consecutive miss limit: %d frames", self.scenario.consecutive_miss_limit)
+        if self.scenario.no_target_timeout_seconds is not None:
+            self.logger.info("Match-any no-target timeout: %.1f seconds", self.scenario.no_target_timeout_seconds)
         active = self.scenario.steps[0]
         last_diagnostic = float("-inf")
+        consecutive_misses = 0
+        no_target_since = time.monotonic()
+        confirmation = StateConfirmation(self.scenario.stable_frames)
+        scan_interval = min(
+            (step.scan_interval_seconds or self.config.scan_interval_seconds)
+            for step in self.scenario.steps
+        )
         try:
             detectors = [(step, self._detector(step)) for step in self.scenario.steps]
             while not self._should_stop():
@@ -122,7 +183,7 @@ class WorkflowRunner:
                     self.logger.info("Match-any click limit reached: clicks=%d max=%d", self.clicks_done, self.max_clicks)
                     return True
                 if self.clicks_done:
-                    remaining = self.config.min_click_interval_seconds - (time.monotonic() - self.last_click_at)
+                    remaining = click_interval - (time.monotonic() - self.last_click_at)
                     if remaining > 0:
                         if not self._sleep_with_stop(remaining):
                             return False
@@ -138,13 +199,51 @@ class WorkflowRunner:
                 if self._should_stop():
                     return False
                 if not matches:
+                    confirmation.update([])
+                    consecutive_misses += 1
                     if time.monotonic() - last_diagnostic >= 5:
-                        self.logger.info("Match-any waiting: no target found; scores=%s",
+                        self.logger.info("Match-any waiting: no target found consecutive_misses=%d%s scores=%s",
+                                         consecutive_misses,
+                                         f"/{self.scenario.consecutive_miss_limit}" if self.scenario.consecutive_miss_limit else "",
                                          {step.id: round(detector.last_score, 4) for step, detector in detectors})
                         last_diagnostic = time.monotonic()
-                    if not self._sleep_with_stop(self.config.scan_interval_seconds):
+                    no_target_elapsed = time.monotonic() - no_target_since
+                    if (self.scenario.no_target_timeout_seconds is not None
+                            and no_target_elapsed >= self.scenario.no_target_timeout_seconds):
+                        self.failure_reason = "no_target_timeout"
+                        self.logger.error(
+                            "Match-any stopped: no target detected for %.1f seconds; clicks=%d",
+                            no_target_elapsed, self.clicks_done,
+                        )
+                        self._save_failure(active)
+                        self._show_no_target_timeout_alert(no_target_elapsed)
+                        return False
+                    if (self.scenario.consecutive_miss_limit is not None
+                            and consecutive_misses >= self.scenario.consecutive_miss_limit):
+                        self.logger.info(
+                            "Match-any stopped after %d consecutive frames without a target; clicks=%d",
+                            consecutive_misses, self.clicks_done,
+                        )
+                        return True
+                    if not self._sleep_with_stop(scan_interval):
                         return False
                     continue
+                self._status(current_step="match_any", best_score=max(match.score for _, match in matches),
+                             visible_targets=sorted(step.id for step, _ in matches))
+                visible_ids = sorted(step.id for step, _match in matches)
+                if not confirmation.update(visible_ids):
+                    self.logger.info(
+                        "Match-any waiting for stable detection: targets=%s frames=%d/%d",
+                        visible_ids, confirmation.count, self.scenario.stable_frames,
+                    )
+                    if not self._sleep_with_stop(scan_interval):
+                        return False
+                    continue
+                if consecutive_misses:
+                    self.logger.info("Match-any target detected; resetting consecutive miss count from %d",
+                                     consecutive_misses)
+                consecutive_misses = 0
+                no_target_since = time.monotonic()
                 active, match = max(matches, key=lambda item: item[1].score)
                 box = frame.to_screen_region(match.box)
                 point = self.clicker.pick_point_inside(box, random.Random())
@@ -154,7 +253,7 @@ class WorkflowRunner:
                         self._save_failure(active)
                     return False
                 self.logger.info("Match-any action count=%d", self.clicks_done)
-                if not self._sleep_with_stop(self.config.scan_interval_seconds):
+                if not self._sleep_with_stop(scan_interval):
                     return False
         except Exception:
             self.failure_reason = "error"
@@ -164,6 +263,19 @@ class WorkflowRunner:
             return False
         self.logger.info("Match-any stopped by user: clicks=%d", self.clicks_done)
         return False
+
+    def _show_no_target_timeout_alert(self, elapsed_seconds: float) -> None:
+        message = (
+            f"Scenario '{self.scenario.name}' stopped because no target image was detected "
+            f"for {elapsed_seconds:.1f} seconds.\n"
+            f"Clicks sent: {self.clicks_done}. See the automation log and failure screenshot."
+        )
+        try:
+            import ctypes
+
+            ctypes.windll.user32.MessageBoxW(None, message, "YYS automation stopped", 0x10 | 0x40000)
+        except Exception as exc:
+            self.logger.error("Could not display no-target timeout dialog: %s", exc)
 
     def _run_cycle(self) -> bool:
         for attempt in range(1, self.scenario.max_retries + 1):
@@ -200,15 +312,19 @@ class WorkflowRunner:
                 return False
             self.failure_reason = ""
             self._resume_index = None
+            step_started_at = time.monotonic()
+            self._status(current_step=step.id)
             self.logger.info("Step started: %s type=%s", step.id, step.type)
             try:
                 success = self._run_step(step)
             except Exception as exc:
                 self.failure_reason = "error"
                 self.logger.exception("Step %s unexpected error: %s", step.id, exc)
+                self._status(current_step=step.id)
                 success = False
             if not success:
                 self.logger.error("Step failed: %s", step.id)
+                self._status(current_step=step.id, last_step_duration_seconds=round(time.monotonic() - step_started_at, 3))
                 if not self._should_stop():
                     self._save_failure(step)
                 if not self._should_stop() and self.failure_reason in {"timeout", "attempts_exhausted", "click_error"}:
@@ -224,6 +340,7 @@ class WorkflowRunner:
                         continue
                 return False
             self.logger.info("Step completed: %s", step.id)
+            self._status(current_step=step.id, last_step_duration_seconds=round(time.monotonic() - step_started_at, 3))
             if self._resume_index is not None:
                 self._recovery_entry = self._resume_index > index + 1
                 index = self._resume_index
@@ -247,6 +364,7 @@ class WorkflowRunner:
                 self.config.template_scale_min,
                 self.config.template_scale_max,
                 self.config.template_scale_step,
+                self._search_region,
             )
 
         deadline = time.monotonic() + step.timeout_seconds
@@ -268,7 +386,7 @@ class WorkflowRunner:
             except Exception as exc:
                 confirmation.reset()
                 self.logger.warning("Step %s capture failed: %s", step.id, exc)
-                self._sleep_with_stop(self.config.scan_interval_seconds)
+                self._sleep_with_stop(self._scan_interval(step))
                 continue
 
             if step.type == "click_point":
@@ -278,12 +396,14 @@ class WorkflowRunner:
 
             assert detector is not None
             match = detector.find_best(frame.image)
+            self._status(current_step=step.id, last_match_score=round(detector.last_score, 4),
+                         last_match_location=list(detector.last_location), last_match_scale=detector.last_scale)
             stable = confirmation.update([step.id] if match is not None else [])
             if match is None:
-                self._sleep_with_stop(self.config.scan_interval_seconds)
+                self._sleep_with_stop(self._scan_interval(step))
                 continue
             if not stable:
-                self._sleep_with_stop(self.config.scan_interval_seconds)
+                self._sleep_with_stop(self._scan_interval(step))
                 continue
             if self._should_stop():
                 return False
@@ -322,6 +442,7 @@ class WorkflowRunner:
             self._detectors[step.id] = TemplateDetector(
                 step.image, step.threshold if step.threshold is not None else self.config.threshold,
                 self.config.template_scale_min, self.config.template_scale_max, self.config.template_scale_step,
+                self._search_region,
             )
         return self._detectors[step.id]
 
@@ -341,7 +462,13 @@ class WorkflowRunner:
         response_deadline = 0.0
         click_error = False
         best_score = 0.0
+        scan_not_before = 0.0
         while time.monotonic() < deadline and not self._should_stop():
+            now = time.monotonic()
+            if now < scan_not_before:
+                if not self._sleep_with_stop(min(scan_not_before - now, self._scan_interval(step))):
+                    return False
+                continue
             try:
                 frame = self.source.grab()
                 self.last_frame = frame
@@ -349,9 +476,11 @@ class WorkflowRunner:
                 confirmation.reset()
                 absent_frames = 0
                 self.logger.warning("Step %s capture failed: %s", step.id, exc)
-                self._sleep_with_stop(self.config.scan_interval_seconds)
+                self._sleep_with_stop(self._scan_interval(step))
                 continue
             current_match = detector.find_best(frame.image)
+            self._status(current_step=step.id, last_match_score=round(detector.last_score, 4),
+                         last_match_location=list(detector.last_location), last_match_scale=detector.last_scale)
             visible = [item for item in candidates if self._detector(item).find_best(frame.image) is not None]
             labels = ([step.id] if current_match is not None else []) + [item.id for item in visible]
             stable = confirmation.update(labels)
@@ -365,7 +494,7 @@ class WorkflowRunner:
                 departed = True
             if not stable:
                 # A transient miss or overlap pauses actions without committing a transition.
-                self._sleep_with_stop(self.config.scan_interval_seconds)
+                self._sleep_with_stop(self._scan_interval(step))
                 continue
             if len(labels) > 1:
                 self.failure_reason = "ambiguous"
@@ -394,7 +523,7 @@ class WorkflowRunner:
                     self.failure_reason = "budget"
                     return False
                 if self.clicks_done and now - self.last_click_at < self.config.min_click_interval_seconds:
-                    self._sleep_with_stop(self.config.scan_interval_seconds)
+                    self._sleep_with_stop(self._scan_interval(step))
                     continue
                 point = self.clicker.pick_point_inside(frame.to_screen_region(current_match.box), random.Random())
                 self.logger.info("Step click attempt %d/%d: %s score=%.4f", attempts + 1, limit, step.id, current_match.score)
@@ -409,8 +538,9 @@ class WorkflowRunner:
                 absent_frames = 0
                 # A possibly delivered click always gets observation time before any retry.
                 response_deadline = time.monotonic() + max(step.response_timeout_seconds, step.wait_after_seconds)
+                scan_not_before = time.monotonic() + step.wait_after_seconds
                 deadline = time.monotonic() + max(target.timeout_seconds, step.response_timeout_seconds)
-            self._sleep_with_stop(self.config.scan_interval_seconds)
+            self._sleep_with_stop(self._scan_interval(step))
         self.failure_reason = "click_error" if click_error else "timeout"
         self.logger.error("Step %s transition timeout: target=%s attempts=%d best_score=%.4f threshold=%.4f",
                           step.id, target.id, attempts, best_score, detector.threshold)
@@ -465,7 +595,7 @@ class WorkflowRunner:
                         self.logger.warning("Recovery resumes at %s after %s; action attempts capped at 2", target.id, step.id)
                         return self.scenario.steps.index(target)
                 if observation + 1 < self.scenario.stable_frames:
-                    if not self._sleep_with_stop(self.config.scan_interval_seconds):
+                    if not self._sleep_with_stop(self._scan_interval(step)):
                         return None
             if scan < self.scenario.recovery_scans:
                 if not self._sleep_with_stop(self.scenario.recovery_interval_seconds):
@@ -534,6 +664,7 @@ class WorkflowRunner:
         self._attempt_clicked = True
         self._cycle_actions.add(step.id)
         self.clicks_done += 1
+        self._status(current_step=step.id, last_action="click", last_point=[x, y])
         self.last_click_at = time.monotonic()
         if self.config.dry_run:
             self.logger.info("Dry run: would click step=%s x=%d y=%d", step.id, x, y)

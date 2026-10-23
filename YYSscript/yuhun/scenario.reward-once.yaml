@@ -18,7 +18,8 @@ steps:
     image: ../../assets/targets/start.png
     threshold: 0.86
     timeout_seconds: 30
-    wait_after_seconds: 1.0
+    wait_after_seconds: 10.0
+    scan_interval_seconds: 0.5
 
   - id: confirm
     max_attempts: 3
@@ -30,6 +31,7 @@ steps:
     threshold: 0.86
     timeout_seconds: 180
     wait_after_seconds: 1.0
+    scan_interval_seconds: 0.2
 
   - id: reward
     max_attempts: 3
@@ -41,6 +43,7 @@ steps:
     threshold: 0.86
     timeout_seconds: 60
     wait_after_seconds: 1.0
+    scan_interval_seconds: 0.15
 
   - id: returned_to_start
     requires_action: reward
@@ -49,3 +52,4 @@ steps:
     threshold: 0.86
     timeout_seconds: 60
     wait_after_seconds: 0
+    scan_interval_seconds: 0.2
