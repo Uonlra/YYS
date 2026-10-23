@@ -305,7 +305,7 @@ GUI 可编辑步骤最大尝试数、下一步骤、响应等待和恢复候选�
 | `click_point` | 点击窗口参考坐标 | `x`、`y`、`timeout_seconds` |
 | `wait` | 固定等待 | `timeout_seconds` |
 
-所有步骤都可使用 `wait_after_seconds`。同一流程中的步骤 ID 应唯一，优先使用模板点击和界面确认，而不是固定坐标。循环和场景级点击预算适用于所有场景，GUI 保存已有场景时会保留这些参数，测试当前步骤仍只执行一次。后续有实际需求时，再扩展步骤识别区域、连续多帧确认或分支，不把业务流程写死在 Python 中。
+所有步骤都可使用 `wait_after_seconds`。它表示动作后至少等待多久再继续识别；例如 start 等待战斗阶段时可设置为 10 秒。每个步骤还可使用 `scan_interval_seconds`，省略时继承全局 `scan_interval_seconds`。长等待步骤使用较大的 `wait_after_seconds` 和较长识别间隔，confirm、reward 等短阶段使用较短识别间隔。同一流程中的步骤 ID 应唯一，优先使用模板点击和界面确认，而不是固定坐标。循环和场景级点击预算适用于所有场景，GUI 保存已有场景时会保留这些参数，测试当前步骤仍只执行一次。后续有实际需求时，再扩展步骤识别区域、连续多帧确认或分支，不把业务流程写死在 Python 中。
 
 ## 测试
 
@@ -339,3 +339,19 @@ GitHub Actions 会在 Windows runner 上使用 Python 3.11、3.12 和 3.13 重�
 - 增加多目标模板
 - 完善已有场景 GUI 的配置体验
 - 增加 dry-run 模式截图标注预览
+
+## 自动停止条件
+
+顺序场景支持可选的无人值守停止条件：
+
+```yaml
+max_runtime_minutes: 120
+max_consecutive_failures: 3
+stop_when:
+  - id: low_energy
+    image: ../../assets/targets/low_energy.png
+    threshold: 0.90
+    stable_frames: 3
+```
+
+`max_runtime_minutes` 限制整次运行时长；`max_consecutive_failures` 限制连续失败的轮数；`stop_when` 中的模板连续稳定识别后立即停止。停止原因会写入日志和 `automation.status.json`，例如 `runtime_limit`、`failure_limit` 或 `stop_image:low_energy`。

@@ -260,6 +260,33 @@ class ValidationTests(unittest.TestCase):
                 path.write_text(yaml.safe_dump({"stable_frames": value, "steps": [{"id": "pause", "type": "wait"}]}), encoding="utf-8")
                 self.assertTrue(any("stable_frames" in error for error in validate_scenario(path)))
 
+    def test_step_scan_interval_is_optional_and_must_be_positive(self) -> None:
+        path = self.root / "scan_interval.yaml"
+        path.write_text(yaml.safe_dump({"steps": [{"id": "pause", "type": "wait",
+            "scan_interval_seconds": 0.2}]}), encoding="utf-8")
+        self.assertEqual(load_scenario(path).steps[0].scan_interval_seconds, 0.2)
+        path.write_text(yaml.safe_dump({"steps": [{"id": "pause", "type": "wait",
+            "scan_interval_seconds": 0}]}), encoding="utf-8")
+        self.assertTrue(any("scan_interval_seconds" in error for error in validate_scenario(path)))
+
+    def test_optional_stop_conditions_are_loaded_and_validated(self) -> None:
+        path = self.root / "stop.yaml"
+        path.write_text(yaml.safe_dump({
+            "max_runtime_minutes": 30,
+            "max_consecutive_failures": 2,
+            "stop_when": [{"id": "energy", "image": "target.png", "threshold": 0.91, "stable_frames": 2}],
+            "steps": [{"id": "pause", "type": "wait"}],
+        }), encoding="utf-8")
+        scenario = load_scenario(path)
+        self.assertEqual(scenario.max_runtime_minutes, 30)
+        self.assertEqual(scenario.max_consecutive_failures, 2)
+        self.assertEqual(scenario.stop_when[0].id, "energy")
+        self.assertEqual(scenario.stop_when[0].stable_frames, 2)
+
+        path.write_text(yaml.safe_dump({"max_runtime_minutes": 0,
+            "steps": [{"id": "pause", "type": "wait"}]}), encoding="utf-8")
+        self.assertTrue(any("max_runtime_minutes" in error for error in validate_scenario(path)))
+
     def test_match_any_rejects_flow_controls_and_invalid_modes(self) -> None:
         path = self.root / "match.yaml"
         cases = ({"max_clicks": "auto"}, {"repeat_count": None}, {"max_retries": 3},

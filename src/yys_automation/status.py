@@ -13,14 +13,15 @@ class RunStatus:
 
     def __init__(self, path: Path) -> None:
         self.path = path
+        self._payload: dict[str, Any] = {}
 
     def update(self, **values: Any) -> None:
-        previous = self.read() or {}
         payload = {
-            **previous,
+            **self._payload,
             "updated_at": datetime.now(timezone.utc).isoformat(),
             **values,
         }
+        self._payload = payload
         self.path.parent.mkdir(parents=True, exist_ok=True)
         fd, name = tempfile.mkstemp(prefix=self.path.name + ".", dir=self.path.parent)
         try:
