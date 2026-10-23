@@ -32,6 +32,14 @@ class ScenarioStep:
 
 
 @dataclass(frozen=True)
+class StopCondition:
+    id: str
+    image: Path
+    threshold: float
+    stable_frames: int = 1
+
+
+@dataclass(frozen=True)
 class Scenario:
     name: str
     max_retries: int
@@ -48,6 +56,9 @@ class Scenario:
     consecutive_miss_limit: int | None = None
     no_target_timeout_seconds: float | None = None
     match_any_click_interval_seconds: float | None = None
+    max_runtime_minutes: float | None = None
+    max_consecutive_failures: int | None = None
+    stop_when: tuple[StopCondition, ...] = ()
 
     @property
     def cycle_limit(self) -> int:
@@ -103,6 +114,40 @@ def load_scenario(path: Path) -> Scenario:
     )
     if match_any_click_interval is not None and match_any_click_interval <= 0:
         raise ValueError("match_any_click_interval_seconds must be positive")
+    max_runtime = (
+        _finite_float(raw["max_runtime_minutes"], "max_runtime_minutes")
+        if raw.get("max_runtime_minutes") is not None else None
+    )
+    if max_runtime is not None and max_runtime <= 0:
+        raise ValueError("max_runtime_minutes must be positive")
+    max_consecutive_failures = (
+        _integer(raw["max_consecutive_failures"], "max_consecutive_failures")
+        if raw.get("max_consecutive_failures") is not None else None
+    )
+    if max_consecutive_failures is not None and max_consecutive_failures < 1:
+        raise ValueError("max_consecutive_failures must be >= 1")
+    raw_stop_when = raw.get("stop_when", [])
+    if not isinstance(raw_stop_when, list):
+        raise ValueError("stop_when must be a list")
+    stop_when: list[StopCondition] = []
+    stop_ids: set[str] = set()
+    for index, item in enumerate(raw_stop_when, start=1):
+        if not isinstance(item, dict):
+            raise ValueError(f"stop_when item {index} must be a mapping")
+        stop_id = str(item.get("id", f"stop_{index}"))
+        if not stop_id.strip() or stop_id in stop_ids:
+            raise ValueError(f"stop_when item {index}: id must be unique and non-empty")
+        stop_ids.add(stop_id)
+        if item.get("image") is None:
+            raise ValueError(f"stop_when {stop_id}: image is required")
+        stop_image = _resolve_path(path.parent, str(item["image"]))
+        stop_threshold = _finite_float(item.get("threshold", 0.9), f"stop_when {stop_id} threshold")
+        stop_frames = _integer(item.get("stable_frames", raw.get("stable_frames", 1)), f"stop_when {stop_id} stable_frames")
+        if not 0.0 < stop_threshold <= 1.0:
+            raise ValueError(f"stop_when {stop_id}: threshold must be between 0 and 1")
+        if not 1 <= stop_frames <= 10:
+            raise ValueError(f"stop_when {stop_id}: stable_frames must be between 1 and 10")
+        stop_when.append(StopCondition(stop_id, stop_image, stop_threshold, stop_frames))
     max_retries = _integer(raw.get("max_retries", 1 if execution_mode == "match_any" else 3), "max_retries")
     if max_retries < 1:
         raise ValueError("scenario max_retries must be >= 1")
@@ -270,6 +315,9 @@ def load_scenario(path: Path) -> Scenario:
         consecutive_miss_limit=consecutive_miss_limit,
         no_target_timeout_seconds=no_target_timeout,
         match_any_click_interval_seconds=match_any_click_interval,
+        max_runtime_minutes=max_runtime,
+        max_consecutive_failures=max_consecutive_failures,
+        stop_when=tuple(stop_when),
     )
 
 
@@ -282,6 +330,7 @@ def validate_scenario(path: Path, config: AppConfig | None = None) -> list[str]:
         return [str(exc)]
     if config is not None and config.capture_mode != "window":
         errors.append("scenario mode requires capture_mode: window")
+    import cv2
     for step in scenario.steps:
         if step.type == "click_point" and config is not None:
             assert step.x is not None and step.y is not None
@@ -296,10 +345,13 @@ def validate_scenario(path: Path, config: AppConfig | None = None) -> list[str]:
             if not step.image.exists():
                 errors.append(f"step {step.id}: image not found: {step.image}")
             else:
-                import cv2
-
                 if cv2.imread(str(step.image), cv2.IMREAD_COLOR) is None:
                     errors.append(f"step {step.id}: image cannot be decoded: {step.image}")
+    for condition in scenario.stop_when:
+        if not condition.image.exists():
+            errors.append(f"stop_when {condition.id}: image not found: {condition.image}")
+        elif cv2.imread(str(condition.image), cv2.IMREAD_COLOR) is None:
+            errors.append(f"stop_when {condition.id}: image cannot be decoded: {condition.image}")
     return errors
 
 
