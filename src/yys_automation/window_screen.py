@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import cv2
+import time
 
 from src.yys_automation.config import WindowConfig
 from src.yys_automation.screen import Frame
@@ -11,20 +12,36 @@ from src.yys_automation.window_capture import WindowCaptureError, capture_client
 class WindowScreenCapture:
     """Capture a visible target window and normalize it to a reference size."""
 
-    def __init__(self, config: WindowConfig) -> None:
+    def __init__(self, config: WindowConfig, recovery_attempts: int = 3, recovery_interval_seconds: float = 0.5) -> None:
         self.config = config
         self.locator = WindowLocator()
+        self.recovery_attempts = recovery_attempts
+        self.recovery_interval_seconds = recovery_interval_seconds
 
     def grab(self) -> Frame:
-        window = self.locator.find_first(
-            self.config.title_contains,
-            handle=self.config.handle,
-            process_id=self.config.process_id,
-        )
-        if window is None:
-            raise WindowCaptureError(f"Window not found: {self.config.title_contains}")
+        last_error: Exception | None = None
+        window = None
+        for attempt in range(1, self.recovery_attempts + 1):
+            try:
+                window = self.locator.find_first(
+                    self.config.title_contains,
+                    handle=self.config.handle,
+                    process_id=self.config.process_id,
+                )
+                if window is None:
+                    raise WindowCaptureError(f"Window not found: {self.config.title_contains}")
+                image, _method = capture_client(window)
+                break
+            except Exception as exc:
+                last_error = exc
+                if attempt < self.recovery_attempts:
+                    time.sleep(self.recovery_interval_seconds)
+        else:
+            raise WindowCaptureError(
+                f"Window capture failed after {self.recovery_attempts} attempts: {last_error}"
+            ) from last_error
 
-        image, _method = capture_client(window)
+        assert window is not None
         actual_height, actual_width = image.shape[:2]
         normalized = cv2.resize(
             image,

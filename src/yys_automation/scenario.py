@@ -28,6 +28,7 @@ class ScenarioStep:
     response_timeout_seconds: float = 3.0
     recover_to: tuple[str, ...] = ()
     requires_action: str | None = None
+    scan_interval_seconds: float | None = None
 
 
 @dataclass(frozen=True)
@@ -166,6 +167,10 @@ def load_scenario(path: Path) -> Scenario:
 
         timeout = _finite_float(item.get("timeout_seconds", 30.0), f"step {step_id} timeout_seconds")
         wait_after = _finite_float(item.get("wait_after_seconds", 0.5), f"step {step_id} wait_after_seconds")
+        scan_interval = (
+            _finite_float(item["scan_interval_seconds"], f"step {step_id} scan_interval_seconds")
+            if item.get("scan_interval_seconds") is not None else None
+        )
         threshold = (
             _finite_float(item["threshold"], f"step {step_id} threshold")
             if item.get("threshold") is not None
@@ -173,6 +178,8 @@ def load_scenario(path: Path) -> Scenario:
         )
         if timeout <= 0 or wait_after < 0:
             raise ValueError(f"step {step_id}: invalid timeout or wait_after_seconds")
+        if scan_interval is not None and scan_interval <= 0:
+            raise ValueError(f"step {step_id}: scan_interval_seconds must be positive")
         if threshold is not None and not 0.0 < threshold <= 1.0:
             raise ValueError(f"step {step_id}: threshold must be between 0 and 1")
         max_attempts = _integer(item.get("max_attempts", 1), f"step {step_id} max_attempts")
@@ -212,6 +219,7 @@ def load_scenario(path: Path) -> Scenario:
                 response_timeout_seconds=response_timeout,
                 recover_to=tuple(recover_to),
                 requires_action=requires_action,
+                scan_interval_seconds=scan_interval,
             )
         )
 
@@ -219,15 +227,15 @@ def load_scenario(path: Path) -> Scenario:
     if execution_mode == "match_any":
         if max_clicks == "auto":
             raise ValueError("match_any has no cycles; use integer max_clicks or omit for config default")
-        if repeat_count != 1 or recovery_scans or max_retries != 1 or retry_after_clicks or stable_frames != 1:
-            raise ValueError("match_any does not use repeat_count, recovery, retries or multi-frame confirmation")
+        if repeat_count != 1 or recovery_scans or max_retries != 1 or retry_after_clicks:
+            raise ValueError("match_any does not use repeat_count, recovery or retries")
         if consecutive_miss_limit is not None and no_target_timeout is not None:
             raise ValueError("configure only one of consecutive_miss_limit or no_target_timeout_seconds")
-    elif match_any_click_interval is not None:
-        raise ValueError("match_any_click_interval_seconds is only supported in match_any mode")
         for step in steps:
             if step.type != "match_and_click" or step.next_step or step.recover_to or step.requires_action or step.max_attempts != 1:
                 raise ValueError(f"step {step.id}: match_any requires plain match_and_click targets without flow rules")
+    elif match_any_click_interval is not None:
+        raise ValueError("match_any_click_interval_seconds is only supported in match_any mode")
     elif consecutive_miss_limit is not None or no_target_timeout is not None:
         raise ValueError("miss timeout settings are only supported in match_any mode")
     for index, step in enumerate(steps):

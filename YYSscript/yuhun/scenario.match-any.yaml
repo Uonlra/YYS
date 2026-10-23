@@ -1,6 +1,8 @@
 name: yuhun_match_any
 execution_mode: match_any
 input_backend: window_message
+# Require two consecutive frames with the same visible target set before clicking.
+stable_frames: 2
 max_clicks: 2400
 no_target_timeout_seconds: 60
 match_any_click_interval_seconds: 1.0

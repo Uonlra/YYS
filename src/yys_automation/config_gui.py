@@ -13,6 +13,7 @@ import yaml
 
 from src.yys_automation.config import load_config
 from src.yys_automation.scenario import STEP_TYPES, Scenario, ScenarioStep, load_scenario, validate_scenario
+from src.yys_automation.status import RunStatus
 
 
 class ScenarioEditor:
@@ -26,6 +27,7 @@ class ScenarioEditor:
         self.steps: list[ScenarioStep] = []
         self.process: subprocess.Popen[str] | None = None
         self.process_cleanup_path: Path | None = None
+        self.status_reader = RunStatus(self.config_path.parent / "logs" / "automation.status.json")
         self._build_ui()
         if scenario_path is not None and scenario_path.exists():
             self._load_file(scenario_path)
@@ -45,6 +47,8 @@ class ScenarioEditor:
         ttk.Button(top, text="停止", command=self._stop_process).pack(side=tk.LEFT, padx=2)
         self.status_var = tk.StringVar(value="就绪")
         ttk.Label(top, textvariable=self.status_var, width=16).pack(side=tk.LEFT, padx=8)
+        self.detail_var = tk.StringVar(value="")
+        ttk.Label(self.root, textvariable=self.detail_var, anchor=tk.W, padding=(10, 0, 10, 4)).pack(fill=tk.X)
 
         body = ttk.PanedWindow(self.root, orient=tk.HORIZONTAL)
         body.pack(fill=tk.BOTH, expand=True, padx=8, pady=(0, 8))
@@ -90,6 +94,7 @@ class ScenarioEditor:
             ("x", "参考 X"),
             ("y", "参考 Y"),
             ("wait", "执行后等待"),
+            ("scan_interval", "识别间隔(空=全局)"),
             ("attempts", "最多点击次数"),
             ("next", "预期下一步骤"),
             ("response", "点击响应等待"),
@@ -169,6 +174,11 @@ class ScenarioEditor:
             str(scenario_path.resolve()),
         ]
         try:
+            self.status_reader = RunStatus(load_config(self.config_path).log_file.parent / "automation.status.json")
+        except Exception:
+            # The child process will report configuration errors; keep the GUI usable.
+            self.status_reader = RunStatus(self.config_path.parent / "logs" / "automation.status.json")
+        try:
             self.process = subprocess.Popen(command, cwd=str(Path(__file__).resolve().parents[2]))
         except OSError as exc:
             if cleanup_path is not None:
@@ -177,7 +187,23 @@ class ScenarioEditor:
             return
         self.process_cleanup_path = cleanup_path
         self.status_var.set("运行中")
+        self.detail_var.set("正在启动…")
+        self._poll_status()
         self._poll_process(cleanup_path)
+
+    def _poll_status(self) -> None:
+        if self.process is None or self.process.poll() is not None:
+            return
+        status = self.status_reader.read()
+        if status:
+            step = status.get("current_step") or "等待截图"
+            clicks = status.get("clicks", 0)
+            limit = status.get("max_clicks")
+            budget = f"{clicks}/{limit}" if limit is not None else str(clicks)
+            score = status.get("last_match_score", status.get("best_score"))
+            score_text = f" 匹配分数 {float(score):.3f}" if isinstance(score, (int, float)) else ""
+            self.detail_var.set(f"步骤：{step} | 点击：{budget}{score_text}")
+        self.root.after(500, self._poll_status)
 
     def _poll_process(self, cleanup_path: Path | None = None) -> None:
         if self.process is None:
@@ -187,6 +213,7 @@ class ScenarioEditor:
             self.root.after(300, lambda: self._poll_process(cleanup_path))
             return
         self.status_var.set(f"已结束 ({code})")
+        self.detail_var.set("任务已结束")
         self.process = None
         self._cleanup_process_file(cleanup_path)
 
@@ -199,6 +226,7 @@ class ScenarioEditor:
                 self.process.kill()
                 self.process.wait(timeout=2)
             self.status_var.set("已停止")
+            self.detail_var.set("任务已停止")
         self.process = None
         self._cleanup_process_file(self.process_cleanup_path)
 
@@ -333,6 +361,7 @@ class ScenarioEditor:
             x=int(x_value) if x_value else None,
             y=int(y_value) if y_value else None,
             wait_after_seconds=float(self.form["wait"].get() or 0.5),
+            scan_interval_seconds=float(self.form["scan_interval"].get()) if self.form["scan_interval"].get().strip() else None,
             max_attempts=int(self.form["attempts"].get() or 1),
             next_step=self.form["next"].get().strip() or None,
             response_timeout_seconds=float(self.form["response"].get() or 3),
@@ -399,6 +428,7 @@ class ScenarioEditor:
         self.form["x"].set(str(step.x or ""))
         self.form["y"].set(str(step.y or ""))
         self.form["wait"].set(str(step.wait_after_seconds))
+        self.form["scan_interval"].set(str(step.scan_interval_seconds or ""))
         self.form["attempts"].set(str(step.max_attempts))
         self.form["next"].set(step.next_step or "")
         self.form["response"].set(str(step.response_timeout_seconds))
@@ -429,6 +459,8 @@ class ScenarioEditor:
             "response_timeout_seconds": step.response_timeout_seconds,
             "recover_to": list(step.recover_to),
         }
+        if step.scan_interval_seconds is not None:
+            data["scan_interval_seconds"] = step.scan_interval_seconds
         if step.next_step is not None:
             data["next_step"] = step.next_step
         if step.requires_action is not None:

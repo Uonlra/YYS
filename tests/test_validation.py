@@ -263,7 +263,7 @@ class ValidationTests(unittest.TestCase):
     def test_match_any_rejects_flow_controls_and_invalid_modes(self) -> None:
         path = self.root / "match.yaml"
         cases = ({"max_clicks": "auto"}, {"repeat_count": None}, {"max_retries": 3},
-                 {"recovery_scans": 2}, {"stable_frames": 3}, {"execution_mode": []},
+                 {"recovery_scans": 2}, {"execution_mode": []},
                  {"execution_mode": "unknown"}, {"input_backend": "unknown"},
                  {"consecutive_miss_limit": 0}, {"consecutive_miss_limit": -1},
                  {"no_target_timeout_seconds": 0}, {"no_target_timeout_seconds": -1},
@@ -275,6 +275,13 @@ class ValidationTests(unittest.TestCase):
                     "steps": [{"id": "target", "type": "match_and_click", "image": "target.png"}],
                 }), encoding="utf-8")
                 self.assertTrue(validate_scenario(path))
+
+    def test_match_any_accepts_multi_frame_confirmation(self) -> None:
+        path = self.root / "match.yaml"
+        path.write_text(yaml.safe_dump({"execution_mode": "match_any", "stable_frames": 3,
+            "steps": [{"id": "target", "type": "match_and_click", "image": "target.png"}],
+        }), encoding="utf-8")
+        self.assertEqual(validate_scenario(path), [])
 
     def test_gui_roundtrip_preserves_match_any_mode(self) -> None:
         from src.yys_automation.config_gui import ScenarioEditor
