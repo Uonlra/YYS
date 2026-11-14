@@ -303,6 +303,14 @@ class ValidationTests(unittest.TestCase):
                 }), encoding="utf-8")
                 self.assertTrue(validate_scenario(path))
 
+    def test_invalid_fast_detection_modes_rejected(self) -> None:
+        path = self.root / "fast.yaml"
+        for mode in (True, None, "unknown", []):
+            path.write_text(yaml.safe_dump({"execution_mode": "match_any",
+                "match_any_detection_mode": mode,
+                "steps": [{"id": "target", "type": "match_and_click", "image": "target.png"}]}), encoding="utf-8")
+            self.assertTrue(any("match_any_detection_mode" in error for error in validate_scenario(path)))
+
     def test_match_any_accepts_multi_frame_confirmation(self) -> None:
         path = self.root / "match.yaml"
         path.write_text(yaml.safe_dump({"execution_mode": "match_any", "stable_frames": 3,
@@ -317,7 +325,7 @@ class ValidationTests(unittest.TestCase):
         for method in ("_save", "_save_silently"):
             with self.subTest(method=method):
                 path.write_text(yaml.safe_dump({"execution_mode": "match_any", "input_backend": "window_message", "max_clicks": 12,
-                    "consecutive_miss_limit": 10,
+                    "consecutive_miss_limit": 10, "match_any_detection_mode": "coarse_to_fine",
                     "steps": [{"id": "target", "type": "match_and_click", "image": "target.png"}],
                 }), encoding="utf-8")
                 original = load_scenario(path)

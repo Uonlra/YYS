@@ -137,7 +137,19 @@ python run.py --config config.yaml --gui scenario.example.yaml
 .\.venv\Scripts\python.exe -B run.py --config config.yaml --scenario YYSscript/yuhun/scenario.match-any.yaml
 ```
 
-`scenario.match-any.yaml` 设置 `execution_mode: match_any`，将 start、confirm、reward 作为无顺序目标列表。每次截图匹配所有目标，达到各自阈值后点击；多图同时命中时选匹配分数最高的一张，分数相同按配置顺序选择。可用场景级 `stable_frames` 要求同一组目标连续识别若干帧后才点击，降低单帧误识别；默认值为 1。每帧最多点击一次，随后等待冷却并重新截图。图片一直存在时会在冷却后再次点击，不受三次动作尝试、前后步骤或领奖阶段约束。连续 60 秒未命中任何目标时，会保存失败截图、弹出错误对话框并以失败状态退出；扫描到任一目标就从该时刻重新计时。
+`scenario.match-any.yaml` 设置 `execution_mode: match_any`，将 start、confirm、reward、continue 作为无顺序目标列表。每次截图匹配所有目标，达到各自阈值后点击；多图同时命中时选匹配分数最高的一张，分数相同按配置顺序选择。可用场景级 `stable_frames` 要求同一组目标连续识别若干帧后才点击，降低单帧误识别；默认值为 1。每帧最多点击一次，随后等待冷却并重新截图。图片一直存在时会在冷却后再次点击，不受三次动作尝试、前后步骤或领奖阶段约束。连续 60 秒未命中任何目标时，会保存失败截图、弹出错误对话框并以失败状态退出；扫描到任一目标就从该时刻重新计时。
+
+`scenario.match-any.yaml` 现启用 `match_any_detection_mode: coarse_to_fine`：在半分辨率彩色图上搜索全部配置缩放，每个缩放最多选取 5 个候选位置，再在原分辨率局部区域使用原彩色模板和原阈值复核。短边小于 16 像素的模板仍使用全量匹配。双帧确认、点击预算、点击白名单和冷却保持生效；扫描等待间隔缩短为 0.1 秒。点击后确认计数清零，下一次点击需要重新满足双帧确认。
+
+这是近似搜索：缩小图片可能丢失细节，候选数量也有限，存在漏检或未选到全局最高分位置的可能。原分辨率复核保证最终分数仍经过原阈值检查，但不保证与全量搜索完全等价。将 `match_any_detection_mode` 改为 `exhaustive` 可恢复全量搜索；其他未指定该选项的场景默认仍使用全量搜索。GUI 保存会保留此设置。快速模式日志中的 `last_score` 是已复核候选的最高分，没有候选时为 0，不代表全图最高分。
+
+日志每 5 秒输出一次扫描耗时摘要；状态文件包含 `capture_duration_seconds`（截图）、`scan_duration_seconds`（全部目标识别合计）、`detector_timings_seconds`（各目标识别）和 `confirmation_duration_seconds`（从本次连续首次观察的截图开始，到确认完成，含截图、识别及帧间等待，不含点击和点击后等待）。可用离线基准比较已有失败截图和三组不同缩放的合成正样本，不会截图或执行点击：
+
+```powershell
+.\.venv\Scripts\python.exe tools/benchmark_match_any.py --frames logs/failures --limit 5
+```
+
+输出逐帧命中、坐标、分数、平均扫描耗时及加速比。已有截图的一致结果仅代表与原算法一致，不替代真实界面验证；合成正样本也不覆盖动画、遮挡或所有缩放。`wait_after_seconds` 和 `match_any_click_interval_seconds` 仍为 1 秒，完整操作耗时还受界面动画、截图和等待影响。
 
 点击后端由 `input_backend` 选择。`physical_mouse` 使用 PyAutoGUI 移动系统鼠标并点击，窗口必须位于桌面最前方，否则物理坐标可能点到遮挡窗口；`window_message` 使用 PostMessage 向目标窗口发消息，不移动光标，可尝试后台窗口，但应用可能忽略后台输入。当前 MuMu 配置需让脚本和模拟器以管理员身份运行；PyCharm 内置终端应由管理员权限启动的 PyCharm 打开。最小化窗口不保证能正确截图或响应点击。日志会说明所选后端；窗口消息失败时会分别记录按下和抬起消息的发送状态。
 
@@ -162,7 +174,7 @@ steps:
     wait_after_seconds: 1
 ```
 
-这是目标列表片段，完整配置还包括 confirm 和 reward。`no_target_timeout_seconds` 从启动或最近一次命中任意目标时开始计时；到时保存截图、弹出 Windows 错误对话框并失败退出。`max_clicks: 2400` 仅限制累计点击数，不代表保证完成 800 轮。可修改成其他非负整数；省略时使用全局配置。此模式不支持 `max_clicks: auto`、重复轮数、多帧确认、恢复扫描和步骤转换规则，配置了这些规则会报错，避免误以为仍受顺序约束。目标的 `timeout_seconds` 不用于退出条件。每次启动重新计数，dry-run 也计入点击上限。
+这是目标列表片段，完整配置还包括 confirm、reward 和 continue。`no_target_timeout_seconds` 从启动或最近一次命中任意目标时开始计时；到时保存截图、弹出 Windows 错误对话框并失败退出。`max_clicks: 2400` 仅限制累计点击数，不代表保证完成 800 轮。可修改成其他非负整数；省略时使用全局配置。此模式不支持 `max_clicks: auto`、重复轮数、步骤转换确认、恢复扫描和步骤转换规则，配置了这些规则会报错，避免误以为仍受顺序约束。目标的 `timeout_seconds` 不用于退出条件。每次启动重新计数，dry-run 也计入点击上限。
 
 GUI 打开并保存此场景会保留模式；目标的添加、删除和图片编辑沿用原界面。其他任务也可配置独立的 `match_any` YAML，普通顺序场景默认仍使用 `execution_mode: sequential`。
 
