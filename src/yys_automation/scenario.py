@@ -59,6 +59,7 @@ class Scenario:
     max_runtime_minutes: float | None = None
     max_consecutive_failures: int | None = None
     stop_when: tuple[StopCondition, ...] = ()
+    match_any_detection_mode: Literal["exhaustive", "coarse_to_fine"] = "exhaustive"
 
     @property
     def cycle_limit(self) -> int:
@@ -90,6 +91,11 @@ def load_scenario(path: Path) -> Scenario:
     execution_mode = raw.get("execution_mode", "sequential")
     if not isinstance(execution_mode, str) or execution_mode not in {"sequential", "match_any"}:
         raise ValueError("execution_mode must be sequential or match_any")
+    detection_mode = raw.get("match_any_detection_mode", "exhaustive")
+    if not isinstance(detection_mode, str) or detection_mode not in {"exhaustive", "coarse_to_fine"}:
+        raise ValueError("match_any_detection_mode must be exhaustive or coarse_to_fine")
+    if detection_mode != "exhaustive" and execution_mode != "match_any":
+        raise ValueError("match_any_detection_mode requires match_any mode")
     input_backend = raw.get("input_backend", "physical_mouse")
     if not isinstance(input_backend, str) or input_backend not in {"physical_mouse", "window_message"}:
         raise ValueError("input_backend must be physical_mouse or window_message")
@@ -315,6 +321,7 @@ def load_scenario(path: Path) -> Scenario:
         consecutive_miss_limit=consecutive_miss_limit,
         no_target_timeout_seconds=no_target_timeout,
         match_any_click_interval_seconds=match_any_click_interval,
+        match_any_detection_mode=detection_mode,
         max_runtime_minutes=max_runtime,
         max_consecutive_failures=max_consecutive_failures,
         stop_when=tuple(stop_when),

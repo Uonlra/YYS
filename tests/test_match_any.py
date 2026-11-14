@@ -161,14 +161,32 @@ class MatchAnyTests(unittest.TestCase):
         save.assert_called_once()
         alert.assert_called_once()
 
+    def test_each_click_requires_new_stable_frames(self) -> None:
+        runner = self.runner([1], limit=2)
+        runner.scenario = replace(runner.scenario, stable_frames=2)
+        with patch.object(runner.source, "grab", wraps=runner.source.grab) as capture:
+            self.assertTrue(runner.run())
+        self.assertEqual(capture.call_count, 4)
+        self.assertEqual(runner.clicks_done, 2)
+        self.assertIn("confirmation_duration_seconds", runner.status.read())
+
+    def test_unstable_visible_targets_still_reset_no_target_timeout(self) -> None:
+        runner = self.runner([1, 0, 2, 0, 1, 0, 2, 2], limit=1)
+        runner.scenario = replace(runner.scenario, stable_frames=2, no_target_timeout_seconds=0.015)
+        with patch.object(runner, "_show_no_target_timeout_alert") as alert:
+            self.assertTrue(runner.run())
+        alert.assert_not_called()
+        self.assertEqual(runner.clicks_done, 1)
+
     def test_shipped_config_is_unordered_and_bounded(self) -> None:
         scenario = load_scenario(Path(__file__).resolve().parents[1] / "YYSscript/yuhun/scenario.match-any.yaml")
+        self.assertEqual(scenario.match_any_detection_mode, "coarse_to_fine")
         self.assertEqual(scenario.execution_mode, "match_any")
         self.assertEqual(scenario.input_backend, "window_message")
         self.assertEqual(scenario.max_clicks, 2400)
         self.assertIsNone(scenario.consecutive_miss_limit)
         self.assertEqual(scenario.no_target_timeout_seconds, 60)
-        self.assertEqual([step.image.stem for step in scenario.steps], ["start", "confirm", "reward"])
+        self.assertEqual([step.image.stem for step in scenario.steps], ["start", "confirm", "reward", "continue"])
 
     def test_match_any_cli_selects_configured_input_backend(self) -> None:
         from dataclasses import replace

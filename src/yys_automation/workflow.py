@@ -234,6 +234,8 @@ class WorkflowRunner:
         consecutive_misses = 0
         no_target_since = self._now()
         confirmation = StateConfirmation(self.scenario.stable_frames)
+        confirmation_started_at = None
+        last_scan_log = float("-inf")
         scan_interval = min(
             (step.scan_interval_seconds or self.config.scan_interval_seconds)
             for step in self.scenario.steps
@@ -250,20 +252,41 @@ class WorkflowRunner:
                         if not self._sleep_with_stop(remaining):
                             return False
                         continue
+                capture_started_at = time.perf_counter()
                 frame = self.source.grab()
+                capture_duration = time.perf_counter() - capture_started_at
                 self.last_frame = frame
                 if self._check_stop_conditions(frame.image):
                     return False
                 matches = []
+                scan_started_at = time.perf_counter()
+                detector_timings: dict[str, float] = {}
                 for step, detector in detectors:
                     active = step
+                    detector_started_at = time.perf_counter()
                     match = detector.find_best(frame.image)
+                    detector_timings[step.id] = round(time.perf_counter() - detector_started_at, 4)
                     if match is not None:
                         matches.append((step, match))
+                scan_duration = round(time.perf_counter() - scan_started_at, 4)
+                self._status(
+                    current_step="match_any_scan",
+                    capture_duration_seconds=round(capture_duration, 4),
+                    scan_duration_seconds=scan_duration,
+                    detector_timings_seconds=detector_timings,
+                )
+                if scan_started_at - last_scan_log >= 5:
+                    self.logger.info(
+                        "Match-any scan duration=%.4fs capture=%.4fs detector_timings=%s frame=%dx%d",
+                        scan_duration, capture_duration, detector_timings,
+                        frame.image.shape[1], frame.image.shape[0],
+                    )
+                    last_scan_log = scan_started_at
                 if self._should_stop():
                     return False
                 if not matches:
                     confirmation.update([])
+                    confirmation_started_at = None
                     consecutive_misses += 1
                     if self._now() - last_diagnostic >= 5:
                         self.logger.info("Match-any waiting: no target found consecutive_misses=%d%s scores=%s",
@@ -295,6 +318,10 @@ class WorkflowRunner:
                 self._status(current_step="match_any", best_score=max(match.score for _, match in matches),
                              visible_targets=sorted(step.id for step, _ in matches))
                 visible_ids = sorted(step.id for step, _match in matches)
+                # Any visible target resets the no-target timer, even before confirmation.
+                no_target_since = self._now()
+                if tuple(visible_ids) != confirmation.last:
+                    confirmation_started_at = capture_started_at
                 if not confirmation.update(visible_ids):
                     self.logger.info(
                         "Match-any waiting for stable detection: targets=%s frames=%d/%d",
@@ -308,6 +335,11 @@ class WorkflowRunner:
                                      consecutive_misses)
                 consecutive_misses = 0
                 no_target_since = self._now()
+                confirmation_duration = time.perf_counter() - (
+                    confirmation_started_at if confirmation_started_at is not None else capture_started_at)
+                self.status.update(confirmation_duration_seconds=round(confirmation_duration, 4))
+                self.logger.info("Match-any confirmed: duration=%.4fs frames=%d",
+                                 confirmation_duration, confirmation.count)
                 active, match = max(matches, key=lambda item: item[1].score)
                 box = frame.to_screen_region(match.box)
                 point = self.clicker.pick_point_inside(box, random.Random())
@@ -317,6 +349,9 @@ class WorkflowRunner:
                         self._save_failure(active)
                     return False
                 self.logger.info("Match-any action count=%d", self.clicks_done)
+                # Frames observed before an action cannot confirm the resulting UI.
+                confirmation.reset()
+                confirmation_started_at = None
                 if not self._sleep_with_stop(scan_interval):
                     return False
         except Exception:
@@ -509,6 +544,8 @@ class WorkflowRunner:
                 step.image, step.threshold if step.threshold is not None else self.config.threshold,
                 self.config.template_scale_min, self.config.template_scale_max, self.config.template_scale_step,
                 self._search_region,
+                **({"coarse_to_fine": True} if self.scenario.execution_mode == "match_any"
+                   and self.scenario.match_any_detection_mode == "coarse_to_fine" else {}),
             )
         return self._detectors[step.id]
 

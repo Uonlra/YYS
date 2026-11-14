@@ -282,6 +282,7 @@ class ScenarioEditor:
                 "recovery_scans": self.scenario.recovery_scans if self.scenario else 0,
                 "recovery_interval_seconds": self.scenario.recovery_interval_seconds if self.scenario else 1,
                 "stable_frames": self.scenario.stable_frames if self.scenario else 1,
+                  **({"match_any_detection_mode": self.scenario.match_any_detection_mode} if self.scenario and self.scenario.execution_mode == "match_any" else {}),
                 **({"max_clicks": self.scenario.max_clicks} if self.scenario and self.scenario.max_clicks is not None else {}),
                 "steps": [self._step_to_yaml(step, path.parent) for step in self.steps],
             }
@@ -316,6 +317,7 @@ class ScenarioEditor:
                 "recovery_scans": self.scenario.recovery_scans if self.scenario else 0,
                 "recovery_interval_seconds": self.scenario.recovery_interval_seconds if self.scenario else 1,
                 "stable_frames": self.scenario.stable_frames if self.scenario else 1,
+                  **({"match_any_detection_mode": self.scenario.match_any_detection_mode} if self.scenario and self.scenario.execution_mode == "match_any" else {}),
                 **({"max_clicks": self.scenario.max_clicks} if self.scenario and self.scenario.max_clicks is not None else {}),
                 "steps": [self._step_to_yaml(step, path.parent) for step in self.steps],
             }
