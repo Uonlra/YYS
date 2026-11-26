@@ -6,7 +6,7 @@ import time
 from src.yys_automation.config import WindowConfig
 from src.yys_automation.screen import Frame
 from src.yys_automation.window import WindowLocator
-from src.yys_automation.window_capture import WindowCaptureError, capture_client
+from src.yys_automation.window_capture import WindowCaptureError, WindowNotFoundError, capture_client
 
 
 class WindowScreenCapture:
@@ -29,7 +29,7 @@ class WindowScreenCapture:
                     process_id=self.config.process_id,
                 )
                 if window is None:
-                    raise WindowCaptureError(f"Window not found: {self.config.title_contains}")
+                    raise WindowNotFoundError(f"Window not found: {self.config.title_contains}")
                 image, _method = capture_client(window)
                 break
             except Exception as exc:
@@ -37,6 +37,8 @@ class WindowScreenCapture:
                 if attempt < self.recovery_attempts:
                     time.sleep(self.recovery_interval_seconds)
         else:
+            if isinstance(last_error, WindowNotFoundError):
+                raise last_error
             raise WindowCaptureError(
                 f"Window capture failed after {self.recovery_attempts} attempts: {last_error}"
             ) from last_error

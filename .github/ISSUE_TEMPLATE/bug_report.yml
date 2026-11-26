@@ -1,0 +1,29 @@
+name: Bug 报告
+description: 提交可复现的问题
+title: "[Bug] "
+body:
+  - type: textarea
+    id: environment
+    attributes:
+      label: 运行环境
+      description: Windows 版本、Python 版本、项目版本或提交，以及安装方式。
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤与最小配置
+      description: 包含执行命令；移除私人内容和本机敏感信息。
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: 预期与实际行为
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: 日志与校验结果
+      description: 附相关错误及 --validate-config 或 --validate-scenario 的输出；分享截图前检查私人内容。

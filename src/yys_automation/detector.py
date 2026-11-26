@@ -48,6 +48,7 @@ class TemplateDetector:
         self.last_score = 0.0
         self.last_location = (0, 0)
         self.last_scale = 1.0
+        self.last_box: Region | None = None
 
     def _build_scaled_templates(self) -> tuple[tuple[float, np.ndarray, int, int], ...]:
         templates: list[tuple[float, np.ndarray, int, int]] = []
@@ -71,6 +72,7 @@ class TemplateDetector:
         self.last_score = 0.0
         self.last_location = (0, 0)
         self.last_scale = 1.0
+        self.last_box = None
 
     def find_best(self, image: np.ndarray) -> Match | None:
         offset_left = 0
@@ -124,19 +126,11 @@ class TemplateDetector:
         self.last_score = score
         self.last_location = max_location
         self.last_scale = best_scale
+        self.last_box = Region(*max_location, best_width, best_height)
         if score < self.threshold:
             return None
 
-        left, top = max_location
-        return Match(
-            score=score,
-            box=Region(
-                left=int(left),
-                top=int(top),
-                width=best_width,
-                height=best_height,
-            ),
-        )
+        return Match(score, self.last_box)
 
     def _refine_candidates(
         self, image: np.ndarray, coarse_image: np.ndarray,

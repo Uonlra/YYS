@@ -24,6 +24,16 @@ class WindowLocator:
         handle: int | None = None,
         process_id: int | None = None,
     ) -> WindowInfo | None:
+        matches = self.find_all(title_contains, handle=handle, process_id=process_id)
+        return matches[0] if matches else None
+
+    def find_all(
+        self,
+        title_contains: str = "",
+        *,
+        handle: int | None = None,
+        process_id: int | None = None,
+    ) -> list[WindowInfo]:
         try:
             import ctypes
             from ctypes import wintypes
@@ -80,7 +90,7 @@ class WindowLocator:
             return True
 
         user32.EnumWindows(callback, 0)
-        return matches[0] if matches else None
+        return matches
 
 
 @dataclass(frozen=True)

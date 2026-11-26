@@ -1,6 +1,44 @@
-# YYS Desktop Automation MVP
+# YYS Desktop Automation
 
 本项目是一个本地桌面自动化辅助程序 MVP：实时截屏，识别指定 UI 图片模板，命中后在受控区域内执行低频、可停止的鼠标点击。
+
+当前处于早期开发阶段，桌面运行面向 Windows，CI 覆盖 Python 3.11–3.13。使用前请先在可观察的窗口中试运行。
+
+## 首次使用
+
+在项目根目录打开 PowerShell，完成安装和校验：
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe run.py --init-config
+# 编辑 config.yaml 中的窗口名称、参考尺寸、点击白名单和目标图片。
+.\.venv\Scripts\python.exe run.py --validate-config
+.\.venv\Scripts\python.exe run.py --validate-scenario YYSscript/yuhun/scenario.match-any.yaml
+.\.venv\Scripts\python.exe run.py --dry-run --scenario YYSscript/yuhun/scenario.match-any.yaml
+```
+
+`--init-config` 创建默认开启 `dry_run` 的配置，已有文件不会被覆盖。自定义路径可使用 `--config PATH --init-config`（父目录需已存在），目标图片路径会按配置所在目录调整。生成的配置引用本仓库中的示例图片；更换项目位置或分发配置时，请一起调整图片路径。
+
+`--dry-run` 只对本次运行生效，即使配置中是 `dry_run: false` 也不发送点击；配置文件不会被改写。GUI 可用 `--dry-run --gui PATH` 打开，运行场景和测试当前步骤都继承此选项。试运行仍会截图、识别、写日志并消耗计划点击预算；界面不会被推动，因此顺序场景可能超时，不能据此证明真实流程成功。
+
+确认识别、坐标和预算后，将配置中的 `dry_run` 改为 `false` 并省略命令行 `--dry-run` 才会发送点击。运行时按 `Esc` 或 `Ctrl+Shift+Q` 停止。
+
+## 命令与问题排查
+
+`python run.py --help` 显示完整参数。`--init-config`、`--validate-config`、`--validate-scenario`、`--probe-window`、`--capture-window`、`--diagnose-match`、`--scenario`、`--gui`、`--resume-gui` 每次只能选择一个。
+
+| 现象 | 处理方式 |
+| --- | --- |
+| 找不到配置 | 运行 `--init-config`；已有配置通过 `--config PATH` 指定 |
+| 图片缺失或无法解码 | 用 `--validate-config` 或 `--validate-scenario PATH` 检查；图片路径相对于各自 YAML 文件 |
+| 找不到窗口 | 用 `--probe-window` 检查标题或句柄；重启应用后更新固定句柄和进程 ID |
+| 看见按钮但不点击 | 检查 `dry_run`、识别阈值、白名单、冷却及点击预算；用 `--diagnose-match` 查看分数 |
+| 消息点击没有响应 | 检查目标应用的输入支持及权限；参阅下文点击后端说明 |
+
+退出码：`0` 表示命令或任务成功，`1` 表示场景校验失败或任务未成功完成，`2` 表示参数、配置或初始化错误。只校验不会截图、监听热键或执行点击。场景运行中的具体停止原因请查看状态文件和日志。
+
+参与开发请阅读 [贡献指南](CONTRIBUTING.md)，后续方向见 [路线图](docs/ROADMAP.md)。仓库目前尚未声明开源许可证；正式作为开源项目发布前，需要作者选定许可证并确认代码和模板图片的分发权限。
 
 它面向你自己的本地软件辅助操作和测试，不用于绕过网站、游戏、广告平台或任何反自动化检测。
 
@@ -52,10 +90,10 @@ YYS/
 
 ## 安装
 
-建议使用虚拟环境：
+建议使用 Python 3.13 和虚拟环境（项目 CI 验证 Python 3.11–3.13）：
 
 ```powershell
-cd D:\Studys\Projects\YYS
+cd D:\projects\yys\YYS
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
@@ -108,6 +146,66 @@ window:
 
 ## 运行
 
+场景编辑器的顶部显示当前场景、目标窗口和生效的点击上限。点击上限旁会标明继承全局、由场景覆盖或按场景设置自动计算。左侧列出步骤，右侧提供步骤设置、确认与恢复、模板预览和识别检查。
+
+- “打开场景…”会直接加载文件并选中第一步；支持另存为和 `Ctrl+S` 保存。
+- 切换步骤、保存、校验或运行时会自动应用当前表单修改，无需先点“应用步骤修改”。加载其他文件或关闭前，会提示处理未保存内容。
+- “校验配置”检查当前编辑内容和全局配置，不改写原场景文件；保存会先检查场景结构，成功后原子替换，非法参数不会覆盖旧文件。
+- 动作类型使用中文名称，无关参数自动禁用；坐标 `0` 可正常显示和保存。参数较多或窗口较小时可用表单滚动条查看。
+- 启动按钮旁会显示“真实点击”或模拟点击的来源。勾选“试运行”只影响本次会话。全局试运行可在“全局设置”中关闭。用 `--dry-run` 打开的工作台会在整个会话中保持试运行。
+- 底部状态栏显示本次任务的步骤、点击数、上限和运行时长。测试单步时使用单步预算。任务停止后，同一处显示原因与“查看现场”入口。
+- “展开日志”可查看本次任务最近约 16 KB 的输出。日志默认收起，展开后仍可看到已收集的内容。持久日志保存在全局配置指定的位置。
+
+“测试选中步骤”只执行一次动作；无顺序场景会沿用原输入后端和连续确认帧数，最多点击一次。该测试不验证完整流程的转换和恢复。
+
+“全局设置”可编辑窗口标题、参考尺寸、白名单、默认点击上限、点击间隔、识别间隔、匹配阈值和试运行。保存时校验数据并更新当前全局 YAML；已有字段会保留，注释和排版可能变化。
+
+“场景设置”可编辑连续确认帧数和场景点击上限。无顺序场景还可设置点击方式、场景点击间隔与无目标停止条件。场景点击上限和点击间隔留空时继承全局设置。步骤里的图片阈值也可留空以继承全局默认值。场景设置应用后即可预览，保存或运行时写入场景文件。
+
+### 识别检查与同帧调参
+
+选中一个含图片的步骤，在“识别检查”页点击“截图识别”。修改试调阈值后点击“同帧重算”，可在原图上对比两套设置的分数、阈值和命中情况。红色十字与表格坐标表示试调结果的点击中心参考点。调试只识别当前步骤，使用对应场景的识别方式。
+
+点击“应用阈值”会更新当前步骤，随后保存或运行时写入场景文件。阈值留空时会继承全局设置。“运行诊断”里的“用此帧调参”可把最后一张诊断截图直接带回此页，参考尺寸改变后需重新截图。
+
+在“识别检查”点“窗口与区域…”可以选择目标窗口、框选白名单和查看所有 match-any 目标的识别结果。窗口列表显示标题、客户区大小、HWND 和进程 ID，也可按全局配置定位。截图与识别在后台进行，检查过程不发送点击。
+
+预览沿用运行时的参考尺寸、模板缩放范围、匹配阈值、搜索白名单和快速匹配选项：
+
+- 蓝框标记点击白名单，绿框标记达到阈值的目标，黄框标记低于阈值的候选。红色十字表示点击中心参考点。
+- 在截图上拖出黄色选框，点击“应用框选…”将区域填入全局设置。保存后会按新白名单重新截图识别。白名单按参考分辨率保存，可在面板中精确修改。
+- 表格显示各目标的分数、阈值、中心参考坐标与屏幕坐标；无顺序模式同时检查全部目标，并标明本帧分数最高的首选目标。
+- 顺序模式只检查编辑器当前选中的步骤，不推断当前执行阶段；图片等待步骤只显示识别框，纯等待步骤不产生点击点。
+- 单帧结果只用于检查图片识别。实际运行还会检查连续确认帧、冷却、执行阶段和预算。快速模式没有可复核候选时，表格不显示分数。
+
+确认窗口后点击“使用此窗口”返回工作台，再按需运行。选择会以 HWND 和进程 ID 同时绑定本次工作台会话，适用于完整运行和单步测试，不改写 `config.yaml`。目标应用重启后请重新选择；失效的句柄不会回退到其他同名窗口。“恢复配置中的窗口”可清除本次选择。
+
+命令行也支持临时窗口绑定，两个参数必须同时提供且为正整数：
+
+```powershell
+python run.py --config config.yaml --window-handle 123456 --window-process-id 1234 --dry-run --scenario YYSscript/yuhun/scenario.match-any-victory.yaml
+```
+
+截图依赖目标应用支持窗口捕获；若预览为黑屏或旧画面，请先恢复窗口并检查权限与捕获支持，预览命中不能替代实际界面确认。
+
+Windows 本地环境配置完成后，双击根目录 `start.bat` 会恢复上次打开的场景及选中步骤。首次启动会打开默认的御魂无顺序场景，启动后停在“就绪”。选中的步骤已被删除或改名时，会选中第一步。启动器固定使用项目的 `.venv\Scripts\python.exe`，无需激活环境，也不依赖系统 PATH。
+
+文件栏的“最近场景”保留最近使用的 8 份场景。场景文件被移动或删除时，界面会提示并提供“重新定位…”。成功定位后会更新记录，场景里仍存在的步骤 ID 会继续被选中。各全局配置的历史分别存放在配置旁，例如 `config.yaml` 对应 `.config.yaml.yys-workbench.json`。历史只记录文件路径和步骤 ID。
+
+命令行的 `--resume-gui` 与双击启动相同。指定 `--gui PATH` 可以直接打开另一份场景。
+
+启动器也支持命令行参数：
+
+```powershell
+.\start.bat --validate-scenario YYSscript/yuhun/scenario.match-any.yaml
+.\start.bat --probe-window
+.\start.bat --scenario YYSscript/yuhun/scenario.match-any.yaml
+```
+
+PyCharm 的项目解释器选择项目目录下的 `.venv\Scripts\python.exe`；运行文件选择 `run.py`，工作目录选择项目根目录，参数可填写 `--config config.yaml --gui YYSscript/yuhun/scenario.match-any.yaml`。
+
+本机的便携 Python 存放在 `.runtime\python313`，虚拟环境依赖此目录，请保留它。旧 Python 3.15 环境保存在 `.venv-python315-backup`；这些本地环境目录均已从 Git 排除。复制项目到新位置后应重新创建虚拟环境。
+
 ```powershell
 python run.py --config config.yaml
 ```
@@ -137,7 +235,7 @@ python run.py --config config.yaml --gui scenario.example.yaml
 .\.venv\Scripts\python.exe -B run.py --config config.yaml --scenario YYSscript/yuhun/scenario.match-any.yaml
 ```
 
-`scenario.match-any.yaml` 设置 `execution_mode: match_any`，将 start、confirm、reward、continue 作为无顺序目标列表。每次截图匹配所有目标，达到各自阈值后点击；多图同时命中时选匹配分数最高的一张，分数相同按配置顺序选择。可用场景级 `stable_frames` 要求同一组目标连续识别若干帧后才点击，降低单帧误识别；默认值为 1。每帧最多点击一次，随后等待冷却并重新截图。图片一直存在时会在冷却后再次点击，不受三次动作尝试、前后步骤或领奖阶段约束。连续 60 秒未命中任何目标时，会保存失败截图、弹出错误对话框并以失败状态退出；扫描到任一目标就从该时刻重新计时。
+`scenario.match-any.yaml` 设置 `execution_mode: match_any`，将 start、confirm、reward、continue 作为无顺序目标列表。每次截图匹配所有目标，达到各自阈值后点击；多图同时命中时选匹配分数最高的一张，分数相同按配置顺序选择。可用场景级 `stable_frames` 要求同一组目标连续识别若干帧后才点击，降低单帧误识别；默认值为 1。每帧最多点击一次，随后等待冷却并重新截图。图片一直存在时会在冷却后再次点击，不受三次动作尝试、前后步骤或领奖阶段约束。当前场景连续 300 秒未命中任何目标时，会保存失败截图并以失败状态退出。工作台显示停止原因，直接从命令行启动时弹出错误对话框；扫描到任一目标就从该时刻重新计时。可通过 `no_target_timeout_seconds` 调整。
 
 `scenario.match-any.yaml` 现启用 `match_any_detection_mode: coarse_to_fine`：在半分辨率彩色图上搜索全部配置缩放，每个缩放最多选取 5 个候选位置，再在原分辨率局部区域使用原彩色模板和原阈值复核。短边小于 16 像素的模板仍使用全量匹配。双帧确认、点击预算、点击白名单和冷却保持生效；扫描等待间隔缩短为 0.1 秒。点击后确认计数清零，下一次点击需要重新满足双帧确认。
 
@@ -174,7 +272,7 @@ steps:
     wait_after_seconds: 1
 ```
 
-这是目标列表片段，完整配置还包括 confirm、reward 和 continue。`no_target_timeout_seconds` 从启动或最近一次命中任意目标时开始计时；到时保存截图、弹出 Windows 错误对话框并失败退出。`max_clicks: 2400` 仅限制累计点击数，不代表保证完成 800 轮。可修改成其他非负整数；省略时使用全局配置。此模式不支持 `max_clicks: auto`、重复轮数、步骤转换确认、恢复扫描和步骤转换规则，配置了这些规则会报错，避免误以为仍受顺序约束。目标的 `timeout_seconds` 不用于退出条件。每次启动重新计数，dry-run 也计入点击上限。
+这是目标列表片段，完整配置还包括 confirm、reward 和 continue。`no_target_timeout_seconds` 从启动或最近一次命中任意目标时开始计时；到时保存截图并失败退出，工作台提供运行诊断。`max_clicks: 2400` 仅限制累计点击数，不代表保证完成 800 轮。可修改成其他非负整数；省略时使用全局配置。此模式不支持 `max_clicks: auto`、重复轮数、步骤转换确认、恢复扫描和步骤转换规则，配置了这些规则会报错，避免误以为仍受顺序约束。目标的 `timeout_seconds` 不用于退出条件。每次启动重新计数，dry-run 也计入点击上限。
 
 GUI 打开并保存此场景会保留模式；目标的添加、删除和图片编辑沿用原界面。其他任务也可配置独立的 `match_any` YAML，普通顺序场景默认仍使用 `execution_mode: sequential`。
 
@@ -201,6 +299,15 @@ GUI 打开并保存此场景会保留模式；目标的添加、删除和图片�
 | `scenario.reward-once.yaml` | 一次完整领奖流程 |
 | `scenario.reward-repeat.yaml` | 重复相同完整流程，最多 800 轮 |
 | `scenario.match-any.yaml` | 无顺序匹配图片，命中即点击，按累计点击数停止 |
+| `scenario.match-any-victory.yaml` | start、victory、reward 三目标无顺序匹配，最多累计点击 2400 次 |
+
+三目标版本引用 `assets/targets/` 下同名图片，沿用现有无顺序场景的窗口消息后端、0.75 阈值、双帧确认、1 秒点击间隔和 300 秒无目标超时。列表顺序为 `start`、`victory`、`reward`，但不强制依次执行。可从工作台“打开场景…”加载，也可直接打开试运行工作台：
+
+```powershell
+.\start.bat --dry-run --gui YYSscript/yuhun/scenario.match-any-victory.yaml
+```
+
+先检查识别分数和实际界面响应，再按需要调整各图片阈值；该预设不统计完整轮数或确认领奖成功。
 
 ```powershell
 .\.venv\Scripts\python.exe -B run.py --config config.yaml --validate-scenario YYSscript/yuhun/scenario.reward-repeat.yaml
@@ -298,11 +405,15 @@ GUI 可编辑步骤最大尝试数、下一步骤、响应等待和恢复候选�
 
 ## 日志与现场
 
-运行场景时，程序会在日志目录写入 `automation.status.json`。这是一个原子更新的状态快照，包含当前步骤、步骤耗时、轮数、最近一轮耗时、总运行时长、点击数、点击预算、最近匹配分数、匹配位置和失败原因；GUI 每 500 毫秒读取它并显示运行进度。任务结束后状态会标记为 `completed` 或 `stopped`，可供外部监控工具读取。
+工作台在运行中显示未命中、确认帧进度、点击冷却和画面切换等待。无顺序模式会显示本帧首选目标和最近一次点击的结果。
+
+任务停止后，可打开「运行诊断」查看停止原因。现场图标出白名单、已命中或未达阈值的候选框，以及尝试点击的位置。通过「调整设置」可以跳到相关参数，通过「重新检查」可以用当前参数重新截图识别。已绑定的窗口不可用时会提示重新选择。
+
+运行状态保存在日志目录的 `automation.status.json`。它包含进程 ID、步骤、运行时长、轮数、点击预算、识别状态和停止原因。任务结束后状态会标记为 `completed` 或 `stopped`。无顺序模式达到点击预算或连续未命中上限时仍正常退出，`stop_reason` 会记录具体原因。
 
 `logs/automation.log` 以追加方式写入，达到 5 MiB 自动轮转为 `.1` 到 `.5`，最多五份归档，文件总量通常约 30 MiB；超过保留数量的旧归档会自动淘汰。原有日志不清空，过大时会在下一条记录触发轮转；单条超长记录可能略超限。重复初始化日志会关闭旧处理器，避免句柄泄漏。不要让多个进程同时写入并轮转同一个日志文件；同时运行不同实例请使用不同 `log_file`。
 
-步骤失败会尝试将归一化后的窗口画面保存到日志文件旁的 `failures/`，仅保留最新 20 张 `failure_*.png`。截图数量受限，文件大小取决于分辨率。日志记录失败原因、步骤、完成轮数、点击数、坐标变换和匹配诊断。无法获取新画面时回退到最近一次截图，并标记 `source=last_capture`；完全没有画面时只记录原因。磁盘写入失败不会阻止任务退出，用户按停止不会生成失败截图。
+失败或触及运行限制时，程序会保存本次运行最后一次成功采集的画面，并把同一帧的识别结果写入状态文件。截图保存在日志文件旁的 `failures/`，`failure_*.png` 和 `stop_*.png` 合计保留最新 20 张。如果没有成功采集或保存画面，诊断仍会显示停止原因。手动停止不生成截图。
 
 ## 多流程约定
 

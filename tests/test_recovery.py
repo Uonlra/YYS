@@ -185,7 +185,8 @@ class RecoveryTests(unittest.TestCase):
 
     def test_screenshot_write_error_does_not_prevent_stopping(self) -> None:
         runner = self.runner([1])
-        with patch("src.yys_automation.workflow.cv2.imwrite", return_value=False):
+        runner.last_frame = runner.source.grab()
+        with patch("src.yys_automation.workflow.cv2.imencode", return_value=(False, None)):
             runner._save_failure(self.start)
         self.assertEqual(list((Path(self.temp.name) / "failures").glob("*.png")), [])
 
