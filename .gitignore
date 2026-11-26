@@ -1,5 +1,7 @@
 # Local environments and Python bytecode
 .venv/
+.venv-*/
+.runtime/
 __pycache__/
 *.py[cod]
 
@@ -24,3 +26,7 @@ htmlcov/
 logs/*
 !logs/.gitkeep
 yys_step_*.yaml
+
+# Local workbench history
+.*.yys-workbench.json
+.yys-workbench-*.tmp

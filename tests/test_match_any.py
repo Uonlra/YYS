@@ -118,6 +118,50 @@ class MatchAnyTests(unittest.TestCase):
         save.assert_called_once()
         self.assertEqual(runner.clicks_done, 0)
 
+    def test_missing_window_preserves_the_last_observed_frame(self) -> None:
+        from src.yys_automation.diagnostics_gui import load_diagnostic_image
+        from src.yys_automation.window_capture import WindowNotFoundError
+
+        runner = self.runner([2])
+        runner.scenario = replace(runner.scenario, stable_frames=2)
+        frame = runner.source.grab()
+        with patch.object(runner.source, "grab", side_effect=[frame, WindowNotFoundError("gone")]) as grab:
+            self.assertFalse(runner.run())
+        status = runner.status.read()
+        self.assertEqual(status["stop_reason"], "window_missing")
+        snapshot = status["diagnostic"]
+        self.assertEqual(snapshot["frame_step"], "confirm")
+        self.assertEqual([item["id"] for item in snapshot["observations"] if item["matched"]], ["confirm"])
+        image = load_diagnostic_image(runner.config.log_file.parent / "failures", snapshot)
+        self.assertEqual(int(image[0, 0, 0]), 2)
+        self.assertEqual(grab.call_count, 2)
+
+    def test_budget_stop_reports_confirmation_and_most_recent_simulated_click(self) -> None:
+        runner = self.runner([0, 3, 3], limit=1)
+        runner.scenario = replace(runner.scenario, stable_frames=2)
+        runner.config = replace(runner.config, dry_run=True)
+        with patch.object(runner, "_status", wraps=runner._status) as update:
+            self.assertTrue(runner.run())
+        states = [call.kwargs for call in update.call_args_list]
+        self.assertTrue(any(state.get("activity") == "no_match" for state in states))
+        confirming = next(state for state in states if state.get("activity") == "confirming")
+        self.assertEqual((confirming["confirmed_frames"], confirming["required_frames"]), (1, 2))
+        self.assertEqual(confirming["preferred_target"], "reward")
+        status = runner.status.read()
+        self.assertEqual(status["stop_reason"], "budget")
+        self.assertEqual(status["last_action_target"], "reward")
+        self.assertEqual(status["last_action_result"], "simulated")
+        self.assertTrue(status["diagnostic"]["screenshot"].startswith("stop_"))
+
+    def test_workbench_timeout_does_not_show_cli_popup(self) -> None:
+        runner = self.runner([0])
+        runner.scenario = replace(runner.scenario, no_target_timeout_seconds=0.02)
+        runner.show_stop_alerts = False
+        with patch.object(runner, "_show_no_target_timeout_alert") as alert:
+            self.assertFalse(runner.run())
+        alert.assert_not_called()
+        self.assertEqual(runner.status.read()["stop_reason"], "no_target_timeout")
+
     def test_ten_consecutive_unmatched_frames_exit_normally(self) -> None:
         runner = self.runner([0], limit=20)
         runner.scenario = replace(runner.scenario, consecutive_miss_limit=10)
@@ -185,7 +229,7 @@ class MatchAnyTests(unittest.TestCase):
         self.assertEqual(scenario.input_backend, "window_message")
         self.assertEqual(scenario.max_clicks, 2400)
         self.assertIsNone(scenario.consecutive_miss_limit)
-        self.assertEqual(scenario.no_target_timeout_seconds, 60)
+        self.assertEqual(scenario.no_target_timeout_seconds, 300)
         self.assertEqual([step.image.stem for step in scenario.steps], ["start", "confirm", "reward", "continue"])
 
     def test_match_any_cli_selects_configured_input_backend(self) -> None:

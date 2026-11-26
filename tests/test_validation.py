@@ -189,6 +189,16 @@ class ValidationTests(unittest.TestCase):
                     editor.steps = list(editor.scenario.steps)
                     editor.path_var = Mock()
                     editor.path_var.get.return_value = str(path)
+                    editor.scenario_path = path
+                    editor.root = Mock()
+                    editor._form_index = None
+                    editor._commit_form = Mock(return_value=True)
+                    editor._is_running = Mock(return_value=False)
+                    editor._refresh_tree = Mock()
+                    editor._clear_missing_scene = Mock()
+                    editor._remember_scene = Mock()
+                    editor.saved_var = Mock()
+                    editor.detail_var = Mock()
                     with patch("src.yys_automation.config_gui.messagebox") as messages:
                         getattr(editor, method)()
                         messages.showerror.assert_not_called()
@@ -244,10 +254,20 @@ class ValidationTests(unittest.TestCase):
                 path.write_text(yaml.safe_dump(payload), encoding="utf-8")
                 original = load_scenario(path)
                 editor = ScenarioEditor.__new__(ScenarioEditor)
-                editor.scenario = original
-                editor.steps = list(original.steps)
+                editor.scenario = load_scenario(path)
+                editor.steps = list(editor.scenario.steps)
                 editor.path_var = Mock()
                 editor.path_var.get.return_value = str(path)
+                editor.scenario_path = path
+                editor.root = Mock()
+                editor._form_index = None
+                editor._commit_form = Mock(return_value=True)
+                editor._is_running = Mock(return_value=False)
+                editor._refresh_tree = Mock()
+                editor._clear_missing_scene = Mock()
+                editor._remember_scene = Mock()
+                editor.saved_var = Mock()
+                editor.detail_var = Mock()
                 with patch("src.yys_automation.config_gui.messagebox") as messages:
                     getattr(editor, method)()
                     messages.showerror.assert_not_called()
@@ -330,10 +350,20 @@ class ValidationTests(unittest.TestCase):
                 }), encoding="utf-8")
                 original = load_scenario(path)
                 editor = ScenarioEditor.__new__(ScenarioEditor)
-                editor.scenario = original
-                editor.steps = list(original.steps)
+                editor.scenario = load_scenario(path)
+                editor.steps = list(editor.scenario.steps)
                 editor.path_var = Mock()
                 editor.path_var.get.return_value = str(path)
+                editor.scenario_path = path
+                editor.root = Mock()
+                editor._form_index = None
+                editor._commit_form = Mock(return_value=True)
+                editor._is_running = Mock(return_value=False)
+                editor._refresh_tree = Mock()
+                editor._clear_missing_scene = Mock()
+                editor._remember_scene = Mock()
+                editor.saved_var = Mock()
+                editor.detail_var = Mock()
                 with patch("src.yys_automation.config_gui.messagebox") as messages:
                     getattr(editor, method)()
                     messages.showerror.assert_not_called()
@@ -351,10 +381,20 @@ class ValidationTests(unittest.TestCase):
                 path.write_text(yaml.safe_dump(payload), encoding="utf-8")
                 original = load_scenario(path)
                 editor = ScenarioEditor.__new__(ScenarioEditor)
-                editor.scenario = original
-                editor.steps = list(original.steps)
+                editor.scenario = load_scenario(path)
+                editor.steps = list(editor.scenario.steps)
                 editor.path_var = Mock()
                 editor.path_var.get.return_value = str(path)
+                editor.scenario_path = path
+                editor.root = Mock()
+                editor._form_index = None
+                editor._commit_form = Mock(return_value=True)
+                editor._is_running = Mock(return_value=False)
+                editor._refresh_tree = Mock()
+                editor._clear_missing_scene = Mock()
+                editor._remember_scene = Mock()
+                editor.saved_var = Mock()
+                editor.detail_var = Mock()
                 with patch("src.yys_automation.config_gui.messagebox") as messages:
                     getattr(editor, method)()
                     messages.showerror.assert_not_called()

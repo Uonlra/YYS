@@ -13,6 +13,10 @@ class WindowCaptureError(RuntimeError):
     pass
 
 
+class WindowNotFoundError(WindowCaptureError):
+    pass
+
+
 def capture_client(window: WindowInfo) -> tuple[np.ndarray, str]:
     """Capture a window client area with PrintWindow without moving the mouse."""
     if window.client_width <= 0 or window.client_height <= 0:

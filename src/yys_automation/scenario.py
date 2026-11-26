@@ -84,6 +84,10 @@ class Scenario:
 def load_scenario(path: Path) -> Scenario:
     with path.open("r", encoding="utf-8") as file:
         raw = yaml.safe_load(file) or {}
+    return parse_scenario(raw, path)
+
+
+def parse_scenario(raw: object, path: Path) -> Scenario:
     if not isinstance(raw, dict):
         raise ValueError("scenario root must be a mapping")
 

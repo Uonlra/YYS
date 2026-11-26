@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import argparse
+import os
 import random
 import sys
 import time
+from dataclasses import replace
 from pathlib import Path
 
 import yaml
@@ -13,46 +15,87 @@ from src.yys_automation.logging_setup import setup_logging
 from src.yys_automation.window import WindowLocator
 
 
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Local desktop UI automation MVP")
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Local Windows desktop UI automation")
     parser.add_argument(
         "--config",
         default="config.yaml",
         help="Path to YAML config file. Defaults to config.yaml.",
     )
-    parser.add_argument(
+    parser.add_argument("--dry-run", action="store_true", help="Simulate clicks for this run without modifying the config.")
+    parser.add_argument("--window-handle", type=int, help="Override target HWND for this session; requires --window-process-id.")
+    parser.add_argument("--window-process-id", type=int, help="Override target process ID; requires --window-handle.")
+    actions = parser.add_mutually_exclusive_group()
+    actions.add_argument("--init-config", action="store_true", help="Create --config from the shipped example; never overwrite an existing file.")
+    actions.add_argument("--validate-config", action="store_true", help="Validate config and its target image without capturing or clicking.")
+    actions.add_argument(
         "--probe-window",
         action="store_true",
         help="Locate the configured Windows window and print its client area without clicking.",
     )
-    parser.add_argument(
+    actions.add_argument(
         "--capture-window",
         metavar="PATH",
         help="Capture the configured window client area to PATH without clicking.",
     )
-    parser.add_argument(
+    actions.add_argument(
         "--diagnose-match",
         action="store_true",
         help="Capture once and print the best template score without clicking.",
     )
-    parser.add_argument(
+    actions.add_argument(
         "--validate-scenario",
         metavar="PATH",
         help="Validate a scenario YAML without running it.",
     )
-    parser.add_argument(
+    actions.add_argument(
         "--scenario",
         metavar="PATH",
         help="Run a scenario YAML through the workflow state machine.",
     )
-    parser.add_argument(
+    actions.add_argument(
         "--gui",
         nargs="?",
-        const="scenario.yaml",
+        const="",
         metavar="PATH",
         help="Open the visual scenario editor, optionally for PATH.",
     )
-    return parser.parse_args()
+    actions.add_argument(
+        "--resume-gui",
+        action="store_true",
+        help="Open the editor and restore the last scenario for this config.",
+    )
+    args = parser.parse_args(argv)
+    identity = (args.window_handle, args.window_process_id)
+    if any(value is not None for value in identity) and not all(value is not None and value > 0 for value in identity):
+        parser.error("--window-handle and --window-process-id must both be positive integers")
+    return args
+
+
+def init_config(config_path: Path) -> int:
+    """Create a safe config, resolving the template relative to the checkout."""
+    template = Path(__file__).resolve().parent / "config.example.yaml"
+    try:
+        raw = yaml.safe_load(template.read_text(encoding="utf-8"))
+        target = (template.parent / raw["target_image"]).resolve()
+        # Keep image references valid even when --config points outside the checkout.
+        try:
+            target_path = os.path.relpath(target, config_path.resolve().parent)
+        except ValueError:  # Windows cannot make relative paths across drive letters.
+            target_path = str(target)
+        raw["target_image"] = target_path.replace(os.sep, "/")
+        raw["dry_run"] = True
+        content = yaml.safe_dump(raw, allow_unicode=True, sort_keys=False)
+        with config_path.open("x", encoding="utf-8") as output:
+            output.write(content)
+    except FileExistsError:
+        print(f"Config already exists; not overwritten: {config_path}", file=sys.stderr)
+        return 2
+    except (OSError, ValueError, KeyError, TypeError, yaml.YAMLError) as exc:
+        print(f"Cannot create config: {exc}", file=sys.stderr)
+        return 2
+    print(f"Config created: {config_path} (dry_run=true). Edit window and allowed_region before running.")
+    return 0
 
 
 def sleep_with_stop(seconds: float, stop_controller: StopController) -> None:
@@ -202,12 +245,14 @@ def run(config: AppConfig) -> int:
     return 0
 
 
-def main() -> int:
-    args = parse_args()
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(argv)
     config_path = Path(args.config)
+    if args.init_config:
+        return init_config(config_path)
     if not config_path.exists():
         print(f"Config file not found: {config_path}", file=sys.stderr)
-        print("Copy config.example.yaml to config.yaml and edit it first.", file=sys.stderr)
+        print("Run with --init-config to create it, then edit window and allowed_region.", file=sys.stderr)
         return 2
 
     try:
@@ -215,10 +260,29 @@ def main() -> int:
     except (OSError, ValueError, KeyError, TypeError, yaml.YAMLError) as exc:
         print(f"Invalid config: {exc}", file=sys.stderr)
         return 2
-    if args.gui is not None:
+    if args.dry_run:
+        config = replace(config, dry_run=True)
+    window_identity = None
+    if args.window_handle is not None:
+        from src.yys_automation.preflight import with_window_identity
+
+        window_identity = (args.window_handle, args.window_process_id)
+        config = with_window_identity(config, window_identity)
+    if args.validate_config:
+        print(f"Config valid: {config_path} capture_mode={config.capture_mode} dry_run={config.dry_run}")
+        return 0
+    if args.gui is not None or args.resume_gui:
         from src.yys_automation.config_gui import launch_gui
 
-        launch_gui(Path(args.gui), config_path)
+        options = {"window_identity": window_identity} if window_identity is not None else {}
+        if args.resume_gui:
+            default_scenario = Path(__file__).resolve().parent / "YYSscript/yuhun/scenario.match-any.yaml"
+            launch_gui(default_scenario, config_path, dry_run=args.dry_run, restore_recent=True, **options)
+        else:
+            scenario_path = Path(args.gui) if args.gui else None
+            if scenario_path is None and Path("scenario.yaml").is_file():
+                scenario_path = Path("scenario.yaml")
+            launch_gui(scenario_path, config_path, dry_run=args.dry_run, **options)
         return 0
     if args.validate_scenario:
         from src.yys_automation.scenario import load_scenario, validate_scenario
@@ -289,6 +353,7 @@ def main() -> int:
                 clicker,
                 stop_controller,
                 logger,
+                show_stop_alerts=os.environ.get("YYS_WORKBENCH_RUN") != "1",
             ).run() else 1
         finally:
             stop_controller.stop()

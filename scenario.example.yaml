@@ -1,9 +1,20 @@
-name: onmyoji_reward_flow
-max_retries: 3
+name: observe_then_click_once
+max_retries: 1
+max_clicks: 1
+stable_frames: 2
 # 默认情况下，点击后失败不会从第一步重复执行，避免重复副作用操作。
 retry_after_clicks: false
 
 steps:
+  # 入门示例：先观察，再重新识别并点击一次，不代表完整领奖流程。
+  # 请替换成你自己的模板；首次使用 --dry-run 运行。
+  - id: observe
+    type: wait_for_image
+    image: assets/targets/start.png
+    threshold: 0.86
+    timeout_seconds: 30
+    wait_after_seconds: 0
+
   - id: start
     type: match_and_click
     image: assets/targets/start.png
@@ -11,35 +22,7 @@ steps:
     timeout_seconds: 30
     wait_after_seconds: 1.0
 
-  # Add the screenshots for the remaining states after capturing them.
-  - id: victory
-    type: match_and_click
-    image: assets/targets/victory.png
-    timeout_seconds: 120
-
-  - id: confirm_1
-    type: match_and_click
-    image: assets/targets/confirm.png
-    timeout_seconds: 20
-
-  - id: confirm_2
-    type: match_and_click
-    image: assets/targets/confirm.png
-    timeout_seconds: 20
-
-  - id: confirm_3
-    type: match_and_click
-    image: assets/targets/confirm.png
-    timeout_seconds: 20
-
-  - id: claim_reward
-    type: click_point
-    x: 640
-    y: 360
-    wait_after_seconds: 1.0
-
-  - id: exit
-    type: click_point
-    x: 640
-    y: 360
-    wait_after_seconds: 1.0
+  - id: pause
+    type: wait
+    timeout_seconds: 1
+    wait_after_seconds: 0

@@ -71,6 +71,10 @@ class AppConfig:
 def load_config(path: Path) -> AppConfig:
     with path.open("r", encoding="utf-8") as file:
         raw = yaml.safe_load(file) or {}
+    return parse_config(raw, path)
+
+
+def parse_config(raw: object, path: Path) -> AppConfig:
     if not isinstance(raw, dict):
         raise ValueError("config root must be a mapping")
 

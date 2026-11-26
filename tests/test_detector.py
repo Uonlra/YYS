@@ -52,8 +52,9 @@ class TemplateDetectorTests(unittest.TestCase):
                                                 0.86, scale, scale, coarse_to_fine=True)
                     template = detector._scaled_templates[0][1]
                     h, w = template.shape[:2]
-                    for x, y in ((0, 0), (41, 53), (321 - w, 301 - h)):
-                        image = np.random.default_rng(9).integers(0, 80, (301, 321, 3), dtype=np.uint8)
+                    frame_width, frame_height = max(321, w + 41), max(301, h + 53)
+                    for x, y in ((0, 0), (41, 53), (frame_width - w, frame_height - h)):
+                        image = np.random.default_rng(9).integers(0, 80, (frame_height, frame_width, 3), dtype=np.uint8)
                         image[y:y+h, x:x+w] = template
                         match = detector.find_best(image)
                         self.assertIsNotNone(match, (name, scale, x, y))
