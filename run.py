@@ -134,7 +134,7 @@ def run(config: AppConfig) -> int:
         clicker = HumanLikeClicker(config, logger)
         stop_controller.start()
 
-        logger.info("Automation starting. Press Esc or Ctrl+Shift+Q to stop.")
+        logger.info("Automation starting. Press Ctrl+Shift+Q to stop.")
         logger.info(
             "Config: target=%s threshold=%.3f dry_run=%s capture_mode=%s",
             config.target_image,

@@ -22,7 +22,7 @@ python -m venv .venv
 
 `--dry-run` 只对本次运行生效，即使配置中是 `dry_run: false` 也不发送点击；配置文件不会被改写。GUI 可用 `--dry-run --gui PATH` 打开，运行场景和测试当前步骤都继承此选项。试运行仍会截图、识别、写日志并消耗计划点击预算；界面不会被推动，因此顺序场景可能超时，不能据此证明真实流程成功。
 
-确认识别、坐标和预算后，将配置中的 `dry_run` 改为 `false` 并省略命令行 `--dry-run` 才会发送点击。运行时按 `Esc` 或 `Ctrl+Shift+Q` 停止。
+确认识别、坐标和预算后，将配置中的 `dry_run` 改为 `false` 并省略命令行 `--dry-run` 才会发送点击。运行时可按全局快捷键 `Ctrl+Shift+Q`，也可在工作台点击「停止任务」。
 
 ## 命令与问题排查
 
@@ -49,7 +49,7 @@ python -m venv .venv
 - 支持点击区域白名单
 - 支持识别阈值、点击冷却时间、最大点击次数
 - 鼠标移动时间、点击点偏移可配置
-- `Esc` 或 `Ctrl+Shift+Q` 紧急停止
+- `Ctrl+Shift+Q` 全局紧急停止
 - 日志记录识别结果、点击坐标、点击时间
 - 场景默认在发生点击后不自动从头重试，避免重复执行有副作用的操作
 
@@ -255,9 +255,9 @@ python run.py --config config.yaml --gui scenario.example.yaml
 input_backend: window_message
 ```
 
-切换后端建议先用小 `max_clicks` 测试。使用 `physical_mouse` 时确认窗口位于最前方并聚焦；使用 `window_message` 时可尝试遮挡窗口并确认游戏响应。物理鼠标会移动光标；按 Esc/Ctrl+Shift+Q 可紧急停止，鼠标移到屏幕左上角也会触发 PyAutoGUI failsafe。模板必须对应实际交互按钮，而不是标题或装饰图。
+切换后端建议先用小 `max_clicks` 测试。使用 `physical_mouse` 时确认窗口位于最前方并聚焦；使用 `window_message` 时可尝试遮挡窗口并确认游戏响应。物理鼠标会移动光标；按 `Ctrl+Shift+Q` 可紧急停止，鼠标移到屏幕左上角也会触发 PyAutoGUI failsafe。模板必须对应实际交互按钮，而不是标题或装饰图。
 
-没有目标命中就继续等待，期间可按 Esc 或 Ctrl+Shift+Q 停止。窗口捕获、图像处理或点击异常，以及点击越界，会停止并记录诊断。点击仍受白名单、`min_click_interval_seconds`、各目标的 `wait_after_seconds`、dry-run 和总点击上限约束。该模式不判断奖励是否领取成功，也不统计完整轮数；重新出现 start 时会按普通目标点击并继续任务。
+没有目标命中就继续等待，期间可按 `Ctrl+Shift+Q` 停止。窗口捕获、图像处理或点击异常，以及点击越界，会停止并记录诊断。点击仍受白名单、`min_click_interval_seconds`、各目标的 `wait_after_seconds`、dry-run 和总点击上限约束。该模式不判断奖励是否领取成功，也不统计完整轮数；重新出现 start 时会按普通目标点击并继续任务。
 
 ```yaml
 name: yuhun_match_any
@@ -314,7 +314,7 @@ GUI 打开并保存此场景会保留模式；目标的添加、删除和图片�
 .\.venv\Scripts\python.exe -B run.py --config config.yaml --scenario YYSscript/yuhun/scenario.reward-repeat.yaml
 ```
 
-重复版每轮确认返回 start 后才进入下一轮。按 Esc 或 Ctrl+Shift+Q 停止；允许的步骤尝试和恢复仍失败后退出。越界、预算不足、状态冲突或鼠标 failsafe 立即停止，不进入恢复。日志记录当前轮数、完成轮数和累计点击数。
+重复版每轮确认返回 start 后才进入下一轮。运行期间可按 `Ctrl+Shift+Q` 停止。允许的步骤尝试和恢复仍失败后退出。越界、预算不足、状态冲突或鼠标 failsafe 立即停止，不进入恢复。日志记录当前轮数、完成轮数和累计点击数。
 
 ```yaml
 repeat_count: null
@@ -443,7 +443,7 @@ GitHub Actions 会在 Windows runner 上使用 Python 3.11、3.12 和 3.13 重�
 运行后：
 
 - 目标图片出现并且匹配度超过阈值时，程序会点击目标中心附近
-- 按 `Esc` 或 `Ctrl+Shift+Q` 立即停止
+- 按 `Ctrl+Shift+Q` 立即停止
 - 日志输出到控制台和 `logs/automation.log`
 
 ## 测试建议

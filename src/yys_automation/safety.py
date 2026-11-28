@@ -32,20 +32,23 @@ class StopController:
                 self._listener.join(timeout=2)
             self._listener = None
 
-    def _on_press(self, key: keyboard.Key | keyboard.KeyCode) -> None:
+    def _on_press(self, key: keyboard.Key | keyboard.KeyCode) -> bool | None:
         self._pressed.add(key)
-        if key == keyboard.Key.esc or self._is_ctrl_shift_q(key):
+        if self._is_ctrl_shift_q(key):
             self.logger.warning("Emergency stop requested")
             self._stop_event.set()
             return False
+        return None
 
     def _on_release(self, key: keyboard.Key | keyboard.KeyCode) -> None:
         self._pressed.discard(key)
 
     def _is_ctrl_shift_q(self, key: keyboard.Key | keyboard.KeyCode) -> bool:
-        if not isinstance(key, keyboard.KeyCode) or key.char is None:
+        if not isinstance(key, keyboard.KeyCode):
             return False
 
-        ctrl_pressed = keyboard.Key.ctrl_l in self._pressed or keyboard.Key.ctrl_r in self._pressed
-        shift_pressed = keyboard.Key.shift_l in self._pressed or keyboard.Key.shift_r in self._pressed
-        return ctrl_pressed and shift_pressed and key.char.lower() == "q"
+        # Windows may translate Ctrl+Shift+Q to a control character.
+        is_q = key.vk == ord("Q") or (key.char or "").lower() == "q"
+        ctrl_pressed = self._pressed & {keyboard.Key.ctrl, keyboard.Key.ctrl_l, keyboard.Key.ctrl_r}
+        shift_pressed = self._pressed & {keyboard.Key.shift_l, keyboard.Key.shift_r}
+        return is_q and bool(ctrl_pressed) and bool(shift_pressed)

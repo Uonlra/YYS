@@ -54,7 +54,7 @@ def build_editor(editor) -> None:
     ttk.Label(heading, text="场景工作台", style="Title.TLabel").pack(side=tk.LEFT)
     editor.saved_var = tk.StringVar(value="已加载")
     ttk.Label(heading, textvariable=editor.saved_var, style="Muted.TLabel").pack(side=tk.LEFT, padx=16)
-    ttk.Label(heading, text="Esc / Ctrl+Shift+Q 停止", style="Muted.TLabel").pack(side=tk.RIGHT)
+    ttk.Label(heading, text="Ctrl+Shift+Q 停止", style="Muted.TLabel").pack(side=tk.RIGHT)
 
     file_area = ttk.Frame(shell, padding=(0, 12, 0, 8))
     file_area.grid(row=1, column=0, sticky="ew")
