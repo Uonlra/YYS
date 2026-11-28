@@ -32,6 +32,15 @@ steps:
   scan_interval_seconds: 0.1
   image: ../../assets/targets/reward.png
   threshold: 0.75
+- id: continue
+  type: match_and_click
+  timeout_seconds: 30.0
+  wait_after_seconds: 0.5
+  max_attempts: 1
+  response_timeout_seconds: 3.0
+  recover_to: []
+  image: ../../assets/targets/continue.png
+  threshold: 0.75
 repeat_count: 1
 max_cycles: 800
 max_clicks: 2400
