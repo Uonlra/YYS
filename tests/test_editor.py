@@ -90,6 +90,7 @@ class EditorTests(unittest.TestCase):
         self.assertIsNone(resumed.scenario_path)
         self.assertEqual(Path(resumed.path_var.get()), self.path)
         self.assertIn("找不到场景", resumed.file_notice_var.get())
+        self.assertFalse(resumed.files_panel.winfo_manager())
         self.assertTrue(resumed.file_notice.winfo_manager())
         with patch("src.yys_automation.config_gui.filedialog.askopenfilename", return_value=str(moved)):
             resumed.relocate_button.invoke()
@@ -163,6 +164,47 @@ class EditorTests(unittest.TestCase):
         self.editor._poll_output()
         self.editor.log_button.invoke()
         self.assertIn("second line", self.editor.log_text.get("1.0", "end-1c"))
+
+    def test_collapsible_panels_preserve_unsaved_values_when_reopened(self) -> None:
+        for panel, button, value, draft in (
+            (self.editor.files_panel, self.editor.files_toggle, self.editor.path_var, "another.yaml"),
+            (self.editor.advanced_panel, self.editor.advanced_toggle, self.editor.form["attempts"], "2"),
+        ):
+            self.assertFalse(panel.winfo_manager())
+            button.invoke()
+            self.assertEqual(panel.winfo_manager(), "grid")
+            value.set(draft)
+            button.invoke()
+            self.assertFalse(panel.winfo_manager())
+            button.invoke()
+            self.assertEqual(value.get(), draft)
+
+    def test_right_sidebar_starts_open_and_preserves_editor_state(self) -> None:
+        sidebar = self.editor.sidebar
+        self.assertIn(str(sidebar), sidebar.body.panes())
+        self.editor.tabs.select(1)
+        selected_tab = self.editor.tabs.select()
+        self.editor.form["timeout"].set("4.5")
+
+        sidebar.toggle_button.invoke()
+        self.assertNotIn(str(sidebar), sidebar.body.panes())
+        self.assertIn("展开右栏", sidebar.toggle_button.cget("text"))
+        sidebar.toggle_button.invoke()
+
+        self.assertIn(str(sidebar), sidebar.body.panes())
+        self.assertIn("收起右栏", sidebar.toggle_button.cget("text"))
+        self.assertEqual(self.editor.tabs.select(), selected_tab)
+        self.assertEqual(self.editor.form["timeout"].get(), "4.5")
+        self.assertTrue(self.editor._form_pending())
+
+    def test_new_step_opens_collapsed_right_sidebar(self) -> None:
+        self.editor.tabs.select(1)
+        self.editor.sidebar.toggle_button.invoke()
+
+        self.editor._new_step()
+
+        self.assertIn(str(self.editor.sidebar), self.editor.sidebar.body.panes())
+        self.assertEqual(self.editor.tabs.select(), self.editor.tabs.tabs()[0])
 
     def test_single_step_starts_with_its_own_budget_in_run_summary(self) -> None:
         self.editor._apply_scenario_settings({"max_clicks": 20})
@@ -313,8 +355,10 @@ class EditorTests(unittest.TestCase):
         ]}).encode("utf-8")
         self.path.write_bytes(original)
         self.editor._load_file(self.path)
+        self.editor.sidebar.toggle_button.invoke()
         self.editor.preflight_button.invoke()
         pane = self.editor.recognition
+        self.assertIn(str(self.editor.sidebar), self.editor.sidebar.body.panes())
         self.assertEqual(self.editor.tabs.select(), str(pane))
         self.assertEqual(pane.threshold.get(), "0.99")
         data = (Frame(image, 0, 0), WindowInfo(1, "Test", 0, 0, 100, 50, 1))
@@ -407,10 +451,18 @@ class EditorTests(unittest.TestCase):
             self.editor._start_process(self.root_path / "missing.yaml")
         popen.assert_not_called()
 
-    def test_irrelevant_fields_are_disabled(self) -> None:
+    def test_irrelevant_fields_are_hidden_and_disabled(self) -> None:
         self.assertEqual(str(self.editor.form_widgets["image"].cget("state")), "disabled")
+        self.assertFalse(self.editor.form_rows["image"].winfo_manager())
         self.editor.form["type"].set(TYPE_LABELS["click_point"])
         self.assertEqual(str(self.editor.form_widgets["x"].cget("state")), "normal")
+        self.assertEqual(self.editor.form_rows["x"].winfo_manager(), "grid")
+        self.editor.form["x"].set("0")
+        self.editor.form["type"].set(TYPE_LABELS["wait_for_image"])
+        self.assertFalse(self.editor.form_rows["x"].winfo_manager())
+        self.assertEqual(self.editor.form_rows["threshold"].winfo_manager(), "grid")
+        self.editor.form["type"].set(TYPE_LABELS["click_point"])
+        self.assertEqual(self.editor.form["x"].get(), "0")
 
     def test_empty_image_shows_preview_error_without_crashing(self) -> None:
         image = self.root_path / "empty.png"

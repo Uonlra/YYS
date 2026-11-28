@@ -33,7 +33,6 @@ class ScenarioEditor:
         self._window_title = ""
         if dry_run:
             self.root.title("YYS 场景配置 — 试运行（不发送点击）")
-        self.root.geometry("1050x650")
         self.scenario_path: Path | None = None
         self.config_path = config_path
         self.recent = RecentScenarios(config_path)
@@ -234,7 +233,11 @@ class ScenarioEditor:
 
     def _show_recognition(self) -> None:
         if not self._is_running() and self._commit_form():
-            self.tabs.select(self.recognition)
+            self._show_editor_tab(self.recognition)
+
+    def _show_editor_tab(self, tab: int | tk.Misc) -> None:
+        self.tabs.select(tab)
+        self.sidebar.expand()
 
     def _recognition_context(self):
         if self._is_running() or not self._commit_form() or self._form_index is None:
@@ -277,7 +280,7 @@ class ScenarioEditor:
 
         def focus_settings() -> None:
             if select_step():
-                self.tabs.select(0)
+                self._show_editor_tab(0)
                 field = "x" if self._step_type() == "click_point" else "threshold"
                 self.form_widgets[field].focus_set()
 
@@ -300,7 +303,7 @@ class ScenarioEditor:
             height, width = frame_data.shape[:2]
             frame = Frame(frame_data, left, top, sx, sy)
             description = WindowInfo(0, "诊断截图", left, top, round(width * sx), round(height * sy))
-            self.tabs.select(self.recognition)
+            self._show_editor_tab(self.recognition)
             self.recognition.use_saved_frame(frame, description)
 
         settings_label = "调整步骤参数"
@@ -349,14 +352,21 @@ class ScenarioEditor:
 
     def _sync_field_states(self) -> None:
         kind = self._step_type()
+        editable = not self._is_running()
+        uses_template = kind in {"match_and_click", "wait_for_image"}
+        uses_coordinates = kind == "click_point"
+        conditional_fields = {"image": uses_template, "threshold": uses_template,
+                              "x": uses_coordinates, "y": uses_coordinates}
+        for key, visible in conditional_fields.items():
+            row = self.form_rows[key]
+            if visible:
+                row.grid()
+            else:
+                row.grid_remove()
         for key, widget in self.form_widgets.items():
-            enabled = not self._is_running()
-            if key in {"image", "threshold"}:
-                enabled = enabled and kind in {"match_and_click", "wait_for_image"}
-            if key in {"x", "y"}:
-                enabled = enabled and kind == "click_point"
+            enabled = editable and conditional_fields.get(key, True)
             widget.configure(state=("readonly" if key == "type" else "normal") if enabled else "disabled")
-        self.image_button.configure(state="normal" if kind in {"match_and_click", "wait_for_image"} and not self._is_running() else "disabled")
+        self.image_button.configure(state="normal" if uses_template and editable else "disabled")
         hints = {"match_and_click": "等待模板稳定出现后点击。阈值留空时使用全局默认值。",
                  "wait_for_image": "只观察图片。阈值留空时使用全局默认值。",
                  "click_point": "使用窗口参考坐标；运行前会检查点击白名单。",
@@ -420,7 +430,7 @@ class ScenarioEditor:
         while any(step.id == f"step_{number}" for step in self.steps):
             number += 1
         self.form["id"].set(f"step_{number}")
-        self.tabs.select(0)
+        self._show_editor_tab(0)
         self.form_widgets["id"].focus_set()
 
     def _preview_image(self) -> None:
