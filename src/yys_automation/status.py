@@ -5,6 +5,7 @@ import os
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
+from time import sleep
 from typing import Any
 
 
@@ -28,10 +29,18 @@ class RunStatus:
             with os.fdopen(fd, "w", encoding="utf-8") as file:
                 json.dump(payload, file, ensure_ascii=False, indent=2)
                 file.write("\n")
+            for delay in (0.01, 0.02, 0.04):
+                try:
+                    os.replace(name, self.path)
+                    return
+                except PermissionError as exc:
+                    # Windows readers can block replacement with access denied or a sharing/lock violation.
+                    if getattr(exc, "winerror", None) not in (5, 32, 33):
+                        raise
+                    sleep(delay)
             os.replace(name, self.path)
         finally:
-            if os.path.exists(name):
-                os.unlink(name)
+            Path(name).unlink(missing_ok=True)
 
     def read(self) -> dict[str, Any] | None:
         try:

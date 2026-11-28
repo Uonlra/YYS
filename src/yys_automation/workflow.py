@@ -88,6 +88,7 @@ class WorkflowRunner:
         self._metrics_started_at = time.perf_counter()
         self._runtime_cache = 0.0
         self._last_status_write = 0.0
+        self._status_write_failed = False
         self._cycle_started_at: float | None = None
         self._consecutive_failures = 0
         self._stop_requested = False
@@ -120,7 +121,17 @@ class WorkflowRunner:
             "runtime_seconds": self._runtime_cache,
         }
         payload.update(values)
-        self.status.update(**payload)
+        self._publish_status(**payload)
+
+    def _publish_status(self, **values: object) -> None:
+        try:
+            self.status.update(**values)
+        except OSError as exc:
+            if not self._status_write_failed:
+                self.logger.warning("Could not publish run status to %s: %s", self.status.path, exc)
+            self._status_write_failed = True
+        else:
+            self._status_write_failed = False
 
     def _grab(self, step: ScenarioStep) -> Frame:
         try:
@@ -151,7 +162,7 @@ class WorkflowRunner:
             if self._diagnostic_frame is not self.last_frame or (self._diagnostic or {}).get("reason") != reason:
                 self._save_diagnostic(reason, self._active_step)
         diagnostic = self._diagnostic if (self._diagnostic or {}).get("reason") == reason else None
-        self.status.update(
+        self._publish_status(
             state="completed" if success else "stopped", pid=os.getpid(), scenario=self.scenario.name,
             current_step=self._active_step.id if self._active_step else None,
             cycle=self.cycles_done, clicks=self.clicks_done, max_clicks=self.max_clicks,
@@ -394,7 +405,7 @@ class WorkflowRunner:
                 no_target_since = self._now()
                 confirmation_duration = time.perf_counter() - (
                     confirmation_started_at if confirmation_started_at is not None else capture_started_at)
-                self.status.update(confirmation_duration_seconds=round(confirmation_duration, 4))
+                self._publish_status(confirmation_duration_seconds=round(confirmation_duration, 4))
                 self.logger.info("Match-any confirmed: duration=%.4fs frames=%d",
                                  confirmation_duration, confirmation.count)
                 box = frame.to_screen_region(match.box)

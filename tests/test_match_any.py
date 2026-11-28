@@ -59,6 +59,24 @@ class MatchAnyTests(unittest.TestCase):
         self.assertEqual(capture.call_count, 3)
         self.assertEqual(runner.clicks_done, 1)
 
+    def test_unavailable_status_file_does_not_interrupt_match_any(self) -> None:
+        runner = self.runner([0, 0, 2], limit=1)
+        runner.config = replace(runner.config, scan_interval_seconds=0.12)
+        with patch.object(runner.status, "update", side_effect=PermissionError("status file busy")) as write, patch(
+            "src.yys_automation.workflow.time.perf_counter", self.clock.monotonic
+        ), self.assertLogs(runner.logger, level="WARNING") as logs:
+            self.assertTrue(runner.run())
+
+        snapshots = [call.kwargs for call in write.call_args_list]
+        self.assertEqual(snapshots[0]["activity"], "starting")
+        self.assertTrue(any(snapshot.get("activity") == "no_match" for snapshot in snapshots))
+        self.assertTrue(any("confirmation_duration_seconds" in snapshot for snapshot in snapshots))
+        self.assertEqual(snapshots[-1]["stop_reason"], "budget")
+        self.assertEqual(runner.clicks_done, 1)
+        self.assertEqual(runner.failure_reason, "")
+        self.assertEqual(len(logs.output), 1)
+        self.assertIn("status file busy", logs.output[0])
+
     def test_highest_score_wins_and_only_one_click_per_frame(self) -> None:
         runner = self.runner([9], limit=1)
 
